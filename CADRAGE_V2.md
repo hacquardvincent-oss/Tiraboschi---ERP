@@ -2,66 +2,81 @@
 
 > Document de cadrage de la refonte V2.
 > Date : 2026-06-03 — Auteur : Vincent Hacquard (hacquard.vincent@gmail.com)
-> Statut : **Cadrage validé — en attente d'accès au code V1 pour démarrer**
+> Statut : **Cadrage en cours — aligné sur l'audit code-vérifié `HANDOFF_V2_SCOPING.md`**
+>
+> ⚠️ **Source d'autorité** : `HANDOFF_V2_SCOPING.md` (audit en lecture directe du code V1 le
+> 2026-06-03) prime sur les anciens `CONTEXT.md` / `CLAUDE.md` (2026-05-31), partiellement périmés.
 
 ---
 
 ## 0. TL;DR
 
-La V1 (`tpe-stripe710`, développée par Antigravity) est **fonctionnellement riche mais
-techniquement fragile** : données effacées à chaque déploiement, sécurité quasi
-inexistante, code monolithique non maintenable.
+La V1 (`tpe-stripe710`, développée via Antigravity/Gemini) est **fonctionnellement riche et
+plusieurs correctifs sécurité sont déjà en place**, mais elle reste **structurellement fragile** :
+données sur disque éphémère, écritures non atomiques, code monolithique, MongoDB en code mort.
 
 La **V2 est une refonte complète** (clean rebuild) qui :
-1. **conserve tout le fonctionnel qui marche** (POS, Stripe, Shopify, taxes, SKU) ;
-2. **règle les 3 dettes critiques** dès les fondations (persistance, sécurité, architecture) ;
-3. **repart sur une stack moderne typée** pour permettre une reprise et une évolution sereines.
+1. **conserve tout le fonctionnel éprouvé** (POS, Stripe Terminal/Checkout, Shopify, taxes, SKU) ;
+2. **règle les risques structurels réels** dès les fondations (persistance fiable + atomique,
+   sécurité auth, architecture modulaire typée) ;
+3. **intègre nativement le métier événementiel (Trunk Shows)**, cœur du business.
 
-Décisions actées : **Refonte complète** · **Stack TypeScript (Node/Express + React/Vite)** ·
-**MongoDB Atlas** · **Render** · code V1 à ajouter au scope de session pour migration de la logique métier.
+Décisions actées : **Refonte complète** · **Stack TypeScript (Node/Express + React/Vite)** · **Render**.
+Décisions **ouvertes** (voir §10) : choix de la base de données, sens de la sync Shopify.
 
 ---
 
 ## 1. Pourquoi une V2
 
 ### Ce que fait l'application (à préserver)
-App tout-en-un pour la maroquinerie de luxe Tiraboschi (boutiques FR, ventes US/international) :
+App tout-en-un pour la maroquinerie de luxe **Tiraboschi**, orientée **ventes événementielles
+(Trunk Shows)**, boutiques FR + ventes US/international :
 
-- **POS / Caisse** — wizard 5 étapes (Modèle → Matière → Option → Couleur → Validation),
-  Stripe Terminal S710, taxes FR/EU/US, mode DDP expédié, liens de paiement WhatsApp/Instagram.
-- **ERP / PLM** — catalogue, fiches techniques, SKU engine, BOM (nomenclature matières).
-- **Stock / MRP** — matières (peaux, bijoux), mouvements, alertes rupture.
-- **CRM** — clients via Shopify, conformité RGPD.
-- **Ventes / Reporting** — historique, KPIs jour/semaine/mois.
-- **Admin** — utilisateurs, config ERP, import/export Excel.
+- **POS / Caisse** — wizard de vente (Modèle → Couleur → Options → Mode d'achat), Stripe Terminal
+  S710, bascule devise EUR/USD, taxes : *Sur Place* (TVA 20% EUR / Sales Tax ~8% USD) et *Expédié
+  DDP* (port forfaitaire 30€/100$ + duties 9% USA, suffixe SKU `-DDP`), article hors-catalogue à la volée.
+- **ERP / PLM** — catalogue visuel par modèle, fiches techniques, SKU engine, BOM (nomenclature matières).
+- **Stock / MRP** — réception fournisseur, mouvements entrée/sortie, alertes rupture, étiquettes QR.
+- **CRM** — clients via Shopify, RGPD (opt-in email/SMS).
+- **Ventes / Reporting** — historique, KPIs jour/semaine/mois, liens de paiement.
+- **Admin** — utilisateurs/permissions, config ERP, import/export Excel.
 
-### Les 3 dettes critiques de la V1 (motivent la refonte)
+Volumétrie réelle (audit) : **285 variants, 47 matières**, 4 utilisateurs, **41 routes API**.
+Design system « **The Blue Sole** » (noir + accent bleu azur `#00D4FF`).
 
-| # | Dette | Symptôme | Score audit |
-|---|---|---|---|
-| 🔴 1 | **Persistance** | Fichiers JSON dans `/data/` effacés à chaque redeploy Render (FS éphémère) → perte de ventes, stock, users en prod | — |
-| 🔴 2 | **Sécurité** | Mots de passe en clair (code + JSON), PIN, pas de hash/JWT, CORS/webhook fragiles | Auth 20% |
-| 🔴 3 | **Architecture** | `server.js` 1395 lignes + `app.js` 2800 lignes monolithiques, non typés | Archi 40% |
+### Bugs « critiques » des anciens docs → DÉJÀ corrigés (vérifié dans le code)
+Ne pas les retraiter — ils sont réglés en V1 :
+- ✅ Webhook Stripe signé (`stripe.webhooks.constructEvent` + `express.raw()`)
+- ✅ `MONGO_URI` lue depuis l'env (plus de hardcode)
+- ✅ CORS restreint via whitelist `ALLOWED_ORIGINS`
+- ✅ Double-comptage KPI corrigé (`/api/shopify/reports` = Shopify uniquement)
 
-### Bugs ponctuels hérités (à ne pas reproduire)
-- Syntax error `server.js:118` (`async function await`)
-- Auth Shopify via `client_credentials` (flow inexistant) → doit être `X-Shopify-Access-Token`
-- Double-comptage KPIs (ventes locales + Shopify)
-- `writeProductsDB` synchrone appelée avec `await`
+### Les risques structurels RÉELS (vérifiés) — motivent la refonte
+| # | Risque | Gravité |
+|---|---|---|
+| 🔴 1 | **Persistance sur disque éphémère Render** — `data/*.json` réécrits localement ; redeploy → perte des données depuis le dernier commit | Bloquant |
+| 🔴 2 | **Écritures JSON non atomiques** — `fs.writeFileSync` sans verrou ; 2 ventes simultanées (Trunk Show) → corruption (cause probable des scripts `restore*.js`) | Bloquant |
+| 🔴 3 | **MongoDB = code mort** — client instancié au boot mais jamais connecté ; fausse robustesse → **0 coût de migration pour changer de base** | Majeur |
+| 🔴 4 | **Sécurité auth** — mots de passe en clair (code + JSON), PIN, pas de hash/JWT, pas de rate-limit login | Majeur |
+| 🟠 5 | **`prestart` rejoue des migrations à chaque boot** (`replace_db_v3.js` + `import_inventaire.js`) | À auditer |
+| 🟡 6 | **Architecture** — `server.js` 1395 l. + `app.js` 2817 l. monolithiques, non typés, duplication | Dette |
+| 🟡 7 | **Pagination Shopify absente** (`limit=250`) → troncature silencieuse quand la base grossit | Dette |
+| 🟡 8 | **Auth Shopify `client_credentials`** (flow non-standard, conservé volontairement) → à reconfirmer | Surveiller |
 
 ---
 
 ## 2. Vision V2
 
-> **Même produit, socle fiable.** On ne jette pas le fonctionnel éprouvé ;
-> on le réimplémente sur des fondations saines, typées et testées.
+> **Même produit, socle fiable et transactionnel.** On réimplémente le fonctionnel éprouvé sur des
+> fondations saines, typées, testées — avec une base de données qui garantit persistance ET intégrité
+> en écritures concurrentes (indispensable en Trunk Show multi-vendeurs).
 
 Principes directeurs :
-1. **Données persistantes par défaut** — plus jamais de perte au déploiement.
-2. **Sécurité native** — secrets hors code, mots de passe hachés, sessions JWT.
-3. **Code lisible et modulaire** — un nouveau venu (humain ou IA) comprend en < 1h.
-4. **Tests sur les zones à risque** — taxes, SKU, paiements, stock.
-5. **Mobile-first** — c'est un POS de boutique, utilisé sur tablette/téléphone.
+1. **Données persistantes + transactionnelles** — fin de l'éphémère ET de la corruption concurrente.
+2. **Sécurité native** — secrets hors code, mots de passe hachés, sessions JWT, rate-limit.
+3. **Code lisible et modulaire typé** — un nouveau venu comprend en < 1h.
+4. **Tests sur les zones à risque** — taxes, SKU, paiements, mouvements de stock.
+5. **Mobile-first + événementiel** — POS de boutique ET de Trunk Show, sur tablette.
 
 ---
 
@@ -69,43 +84,49 @@ Principes directeurs :
 
 | Couche | Choix V2 | Justification |
 |---|---|---|
-| Langage | **TypeScript** (back + front) | Domaine complexe (SKU, BOM, taxes, devises) → typage = filet de sécurité |
+| Langage | **TypeScript** (back + front) | Domaine complexe (SKU, BOM, taxes, devises) → typage = filet |
 | Backend | **Node 20 + Express** | Continuité V1, écosystème connu |
-| ODM / DB | **Mongoose + MongoDB Atlas** | Schémas explicites, persistance garantie |
-| Validation | **Zod** | Validation des entrées API + inférence de types |
+| **Base de données** | **À trancher (§10-1)** — reco : **PostgreSQL + Prisma** | Domaine relationnel (BOM, ledger stock, ventes, séries) + transactions = intégrité concurrente. Mongo étant du code mort, aucun coût à abandonner |
+| Validation | **Zod** | Validation entrées API + inférence de types |
 | Auth | **bcrypt + JWT + express-rate-limit** | Règle la dette sécurité |
 | Frontend | **React 18 + Vite** | Composants → fin du monolithe ; build/HMR instantané |
 | État serveur | **TanStack Query** | Cache, retry, sync Stripe/Shopify propres |
-| UI | **Tailwind CSS** | Touch targets ≥44px, responsive rapide |
-| Mobile | **PWA (`vite-plugin-pwa`)** | Installable sur tablette + cache hors-ligne |
+| UI | **Tailwind CSS** | Reprise du DS « The Blue Sole », touch targets ≥44px |
+| Mobile | **PWA (`vite-plugin-pwa`)** | Installable tablette + cache hors-ligne (Trunk Show) |
 | Tests | **Vitest + Playwright** | Unitaire (taxes/SKU) + e2e (wizard POS) |
 | Qualité | **ESLint + Prettier** | Cohérence de code |
-| Infra | **Render + MongoDB Atlas** | On garde l'existant qui fonctionne |
+| Infra | **Render + base managée persistante** | On garde Render qui fonctionne |
 
-> Alternative plus légère envisagée : **Svelte/SvelteKit** (moins de boilerplate).
-> React retenu par défaut pour la facilité de reprise et l'écosystème.
+> **Révision de reco vs version initiale** : la 1ʳᵉ version de ce cadrage proposait MongoDB « car déjà
+> branché ». L'audit montre que Mongo est **du code mort** → pas de sunk cost. Le domaine ERP est
+> **relationnel** (BOM, mouvements de stock = ledger, ventes, numéros de série) et exige des
+> **transactions** (Trunk Show concurrent). → **PostgreSQL + Prisma** devient ma reco. Mongo reste une
+> option valable si tu préfères le document store (décision §10-1).
 
-### Modèle de données MongoDB (collections cibles)
-`variants` · `stock` (matières) · `sales` · `users` · `config` · `collections` · `serials` (numéros de série pièce — nouveau)
+### Modèle de données cible (entités)
+`products`/`variants` · `materials` + `stock_movements` (ledger) · `boms` (variant ↔ matières) ·
+`sales` · `serials` (numéro de série pièce — nouveau) · `users` · `events` (Trunk Shows — nouveau) ·
+`config` (dictionnaires ERP : models, years, seasons, options, colors, suppliers, hsCodes, ateliers…).
 
 ### Arborescence cible (proposition)
 ```
 tiraboschi-erp/
 ├── api/                      # Backend Express + TS
 │   ├── src/
-│   │   ├── routes/           # pos, payments, shopify, stock, crm, admin, auth
+│   │   ├── routes/           # pos, payments, shopify, stock, crm, admin, auth, events
 │   │   ├── services/         # logique métier (tax, sku, shopifyClient, stripe)
-│   │   ├── models/           # schémas Mongoose
+│   │   ├── db/               # Prisma schema + migrations (ou ODM si Mongo)
 │   │   ├── middleware/       # auth JWT, rateLimit, validation Zod
 │   │   └── server.ts
 │   └── tests/
 ├── web/                      # Frontend React + Vite + TS
 │   ├── src/
-│   │   ├── modules/          # pos/ erp/ stock/ crm/ ventes/ admin/
-│   │   ├── components/       # UI partagée
-│   │   ├── lib/              # api client, i18n, auth
+│   │   ├── modules/          # pos/ erp/ stock/ crm/ ventes/ admin/ events/
+│   │   ├── components/       # UI partagée (DS The Blue Sole)
+│   │   ├── lib/              # api client, i18n FR/EN, auth
 │   │   └── main.tsx
 │   └── tests/
+├── legacy-v1/                # (optionnel) snapshot V1 en référence lecture seule
 ├── .env.example
 └── README.md
 ```
@@ -115,124 +136,118 @@ tiraboschi-erp/
 ## 4. Périmètre V2
 
 ### Dans le périmètre (refonte du fonctionnel V1)
-- POS wizard 5 étapes + Stripe Terminal S710
-- Liens de paiement Stripe Checkout + page `/pay/:id` (workaround WebView WhatsApp/Instagram)
-- Calcul taxes FR/EU/US (Draft Orders Shopify pour DDP US)
-- SKU engine (nouveau format `OL-25H-CU001-CH-NR`)
-- Catalogue, fiches techniques, BOM
-- Stock matières + mouvements + alertes
-- CRM via Shopify + RGPD
-- Historique ventes + KPIs (source de vérité unique : Shopify → fin du double-comptage)
-- Admin users + config + import/export Excel
-- Auth multi-utilisateurs (bcrypt + JWT, remplace le PIN clair)
-- i18n FR/EN
+POS wizard + Stripe Terminal S710 · liens Checkout + page `/pay/:id` (workaround WebView) ·
+taxes FR/EU/US (Draft Orders Shopify pour DDP) · SKU engine (avec incrément séquentiel `-01/-02`
+**manquant en V1**) · catalogue/fiches/BOM · stock + mouvements + alertes · CRM Shopify + RGPD ·
+historique ventes + KPIs (source unique Shopify) · admin users/config · import/export Excel ·
+auth bcrypt + JWT · i18n FR/EN.
 
-### Nouveautés V2 (au-delà de la V1)
-- Numéro de série unique par pièce (traçabilité luxe, SAV, anti-contrefaçon)
+### Nouveautés V2
+- **Événements / Trunk Shows** (lieu, date, vendeurs, rapport par événement) — cœur métier
+- Numéro de série unique par pièce (traçabilité luxe)
 - Auto-décrémentation stock à la vente (vente → décrément BOM)
 - PDF facture automatique après paiement
 - Dashboard analytics (graphiques, filtres vendeur/événement)
 - PWA installable + mode hors-ligne POS
+- Montée de version Shopify API (2024-01 → récente, GraphQL) — **à confirmer (§10-3)**
 
-### Hors périmètre (pour l'instant)
-- Migration de l'historique de données V1 (à décider : reseed propre vs import)
-- Trunk shows, passeport produit QR, RMA complet → backlog long terme
+### Hors périmètre / backlog
+- Sync bidirectionnelle complète PLM → Shopify (push produits) — selon §10-2
+- Passeport produit QR, suivi RMA complet, commissions vendeurs avancées
+
+### Migration des données V1
+- **Backup impératif** des `data/*.json` actuels avant tout (potentiellement seules données vivantes).
+- Script d'import unique JSON → nouvelle base (one-shot, pas un `prestart` récurrent).
 
 ---
 
 ## 5. Roadmap par phases
 
-### Phase 0 — Fondations (bloquant, avant tout le reste)
-- [ ] Ajouter `tpe-stripe710` au scope de session (accès code V1)
+### Phase 0 — Fondations (bloquant)
+- [ ] Récupérer / snapshot le code V1 (`legacy-v1/`) pour extraire la logique métier exacte
+- [ ] Trancher la base de données (§10-1)
 - [ ] Scaffolding repo V2 (api + web, TS, lint, CI)
 - [ ] `.env.example` complet + secrets hors code
-- [ ] Connexion MongoDB Atlas + schémas Mongoose
+- [ ] Connexion base persistante + schéma + script d'import one-shot des `data/*.json`
 - [ ] Auth bcrypt + JWT + rate-limit
 
-### Phase 1 — Cœur métier POS (valeur immédiate)
-- [ ] SKU engine (nouveau format) + tests
-- [ ] Calcul taxes FR/EU/US + tests
-- [ ] Wizard POS 5 étapes
-- [ ] Stripe Terminal S710 (connection token, PaymentIntent create/capture)
-- [ ] Liens de paiement + `/pay/:id` + webhook
-- [ ] Sync commande Shopify à la vente
+### Phase 1 — Cœur métier POS
+- [ ] SKU engine (nouveau format + incrément séquentiel) + tests
+- [ ] Calcul taxes FR/EU/US (Sur Place + DDP) + tests
+- [ ] Wizard POS + Stripe Terminal S710
+- [ ] Liens de paiement + `/pay/:id` + webhook signé
+- [ ] Sync commande Shopify à la vente (avec pagination cursor)
 
-### Phase 2 — ERP / Stock
-- [ ] Catalogue + fiches techniques + BOM
-- [ ] Stock matières + mouvements + alertes
+### Phase 2 — ERP / Stock (transactionnel)
+- [ ] Catalogue + fiches + BOM
+- [ ] Stock + mouvements (écritures atomiques) + alertes
 - [ ] Auto-décrémentation stock à la vente
 - [ ] Import/Export Excel (UI)
 
-### Phase 3 — CRM / Reporting / Admin
+### Phase 3 — Événements / CRM / Reporting / Admin
+- [ ] Objet Événement (Trunk Show) + rapport par événement
 - [ ] CRM Shopify + RGPD
-- [ ] Historique ventes + KPIs (source unique Shopify)
-- [ ] Dashboard analytics
+- [ ] Historique ventes + KPIs (source unique Shopify) + dashboard analytics
 - [ ] Admin users + config
 
 ### Phase 4 — Mobile & traçabilité luxe
 - [ ] PWA + mode hors-ligne
 - [ ] Numéro de série par pièce + statuts + localisation
-- [ ] PDF facture + passeport produit
+- [ ] PDF facture + passeport produit QR
 
 ---
 
-## 6. Intégrations (référence technique)
+## 6. Intégrations (référence)
 
-### Stripe Terminal
-`POST /api/connection_token` · `POST /api/create_payment_intent` (capture manuelle) ·
-`POST /api/capture_payment_intent` · Lecteur S710 (BT/USB) · EUR + USD.
+### Stripe Terminal S710 — 🟢 solide en V1
+`connection_token`, `locations`, `readers`, PaymentIntent create/capture. EUR + USD.
 
-### Stripe Checkout (liens de paiement)
-`POST /api/create_payment_link` → URL · `GET /pay/:id` → redirect browser (fix WebView) ·
-`POST /api/webhook` → `checkout.session.completed` → commande Shopify.
+### Stripe Checkout (liens) — 🟢 très bien en V1
+`create_payment_link` + `/pay/:id` (contourne WebView WhatsApp/Instagram) + webhook **signé**.
 
-### Shopify Admin API v2024-01
-Store `axp150-71.myshopify.com` · Auth **`X-Shopify-Access-Token`** (corrige le `client_credentials` V1) ·
-Produits, clients, commandes, inventaire, Draft Orders (taxes US/EU), sync ventes POS.
-
-### MongoDB Atlas
-Cluster `6a04e0894406869d3a1f4544` · DB `tiraboschi_pos` · **source de vérité des données métier en V2**.
+### Shopify Admin API — 🟡 v2024-01
+Store `tiraboschi-paris.myshopify.com` · Auth via `client_credentials` (à reconfirmer, §10) ·
+Commandes/clients/inventaire/Draft Orders (taxes US) · **manque pagination cursor** (`limit=250`).
+V2 : monter de version + GraphQL (§10-3).
 
 ---
 
 ## 7. Utilisateurs
-
-| ID | Nom | Rôle | Accès |
-|---|---|---|---|
-| USR-1 | Vincent Hacquard | Admin | Tout |
-| USR-2 | Laurène Mauro | Admin | Tout |
-| USR-CHIARA | Chiara | Vendeur | Caisse + Ventes |
-| USR-PATTI | Patti | Vendeur | Caisse + Ventes |
-
-> En V2 : mots de passe hachés (bcrypt), jamais en clair dans le code ni le repo.
+USR-1 Vincent Hacquard (admin) · USR-2 Laurène Mauro (admin) · USR-CHIARA Chiara (caisse+ventes) ·
+USR-PATTI Patti (caisse+ventes). **V2 : mots de passe hachés (bcrypt), jamais en clair.**
 
 ---
 
 ## 8. Conventions
-
-### Commits
-`fix:` · `feat:` · `refactor:` · `security:` · `data:` · `ux:` · `chore:` · `test:`
-
-### Branches
-`main` (prod, déploiement Render auto) ← `develop` (travail) ← `feature/*`
+**Commits** : `fix:` `feat:` `refactor:` `security:` `data:` `ux:` `chore:` `test:`
+**Branches** : `main` (prod Render, intouchable) ← `develop` ← `feature/*`. Jamais de push direct sur `main`.
 
 ---
 
 ## 9. Décisions actées
-
 | Date | Décision | Justification |
 |---|---|---|
-| 2026-06-03 | Refonte complète (clean rebuild) | Dette technique V1 trop lourde pour refactoring |
+| 2026-06-03 | Refonte complète (clean rebuild) | Dette V1 trop lourde pour refactoring |
 | 2026-06-03 | TypeScript back + front | Domaine ERP complexe → typage = sécurité |
-| 2026-06-03 | React + Vite (abandon Vanilla JS) | Le monolithe `app.js` était le vrai problème, pas le build step |
-| 2026-06-03 | MongoDB Atlas = source de vérité | Fin des données éphémères Render |
-| 2026-06-03 | Shopify = source unique des KPIs | Élimine le double-comptage |
-| 2026-06-03 | Tailwind + PWA | POS tactile mobile-first |
+| 2026-06-03 | React + Vite (abandon Vanilla JS) | Le monolithe `app.js` était le vrai problème |
+| 2026-06-03 | Tailwind + PWA, reprise DS « The Blue Sole » | POS tactile mobile-first / événementiel |
+| 2026-06-03 | Base relationnelle (Postgres+Prisma) **proposée** | Domaine relationnel + transactions ; Mongo = code mort (0 sunk cost) |
+| 2026-06-03 | Shopify = source unique KPIs | Déjà en place en V1, à conserver |
+| 2026-06-03 | Trunk Shows = objet de 1ʳᵉ classe | Cœur métier événementiel |
 
 ---
 
-## 10. Prochaine étape
+## 10. Décisions ouvertes à trancher
+1. **Base de données** : PostgreSQL+Prisma (reco) · MongoDB Atlas · SQLite + disque persistant Render ?
+2. **Sens de la sync Shopify** : Shopify reste master du catalogue/stock, ou l'ERP local devient master
+   avec push vers Shopify (sync bidirectionnelle) ?
+3. **Montée de version Shopify API** (2024-01 → récente + GraphQL) : in/out scope V2 ?
+4. **Traçabilité luxe** (numéro de série par pièce + QC) : V2 ou V3 ?
 
-1. **Ajouter `tpe-stripe710` au scope de session** (réglage des dépôts autorisés, côté Claude Code on the web).
-2. Une fois fait : je lis le code V1 pour extraire la logique métier exacte
-   (taxes, SKU engine, workaround `/pay/:id`, sync Shopify) et je démarre le **scaffolding Phase 0**.
+---
+
+## 11. Prochaine étape
+1. Récupérer le code V1 en référence (snapshot `legacy-v1/` dans ce repo — voir reco précédente),
+   pour extraire la logique métier exacte (formules taxes, `generateSKU`, payloads Shopify, `/pay/:id`).
+2. Trancher §10-1 (base de données).
+3. Démarrer le **scaffolding Phase 0**.
