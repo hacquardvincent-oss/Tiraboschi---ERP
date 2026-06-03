@@ -2,7 +2,7 @@
 
 > Document de cadrage de la refonte V2.
 > Date : 2026-06-03 — Auteur : Vincent Hacquard (hacquard.vincent@gmail.com)
-> Statut : **Cadrage en cours — aligné sur l'audit code-vérifié `HANDOFF_V2_SCOPING.md`**
+> Statut : **Cadrage validé — décisions d'architecture tranchées (voir §9)**
 >
 > ⚠️ **Source d'autorité** : `HANDOFF_V2_SCOPING.md` (audit en lecture directe du code V1 le
 > 2026-06-03) prime sur les anciens `CONTEXT.md` / `CLAUDE.md` (2026-05-31), partiellement périmés.
@@ -21,8 +21,9 @@ La **V2 est une refonte complète** (clean rebuild) qui :
    sécurité auth, architecture modulaire typée) ;
 3. **intègre nativement le métier événementiel (Trunk Shows)**, cœur du business.
 
-Décisions actées : **Refonte complète** · **Stack TypeScript (Node/Express + React/Vite)** · **Render**.
-Décisions **ouvertes** (voir §10) : choix de la base de données, sens de la sync Shopify.
+Décisions actées : **Refonte complète** · **Stack TypeScript (Node/Express + React/Vite)** · **Render** ·
+**PostgreSQL + Prisma** · **Shopify API montée de version + GraphQL** · **n° de série/traçabilité dès V2** ·
+**source de vérité par paliers** (à date : catalogue Shopify + inventaire depuis Drive ; cible : l'app devient master).
 
 ---
 
@@ -86,7 +87,7 @@ Principes directeurs :
 |---|---|---|
 | Langage | **TypeScript** (back + front) | Domaine complexe (SKU, BOM, taxes, devises) → typage = filet |
 | Backend | **Node 20 + Express** | Continuité V1, écosystème connu |
-| **Base de données** | **À trancher (§10-1)** — reco : **PostgreSQL + Prisma** | Domaine relationnel (BOM, ledger stock, ventes, séries) + transactions = intégrité concurrente. Mongo étant du code mort, aucun coût à abandonner |
+| **Base de données** | **PostgreSQL + Prisma** ✅ | Domaine relationnel (BOM, ledger stock, ventes, séries) + transactions = intégrité concurrente. Mongo étant du code mort, aucun coût à abandonner |
 | Validation | **Zod** | Validation entrées API + inférence de types |
 | Auth | **bcrypt + JWT + express-rate-limit** | Règle la dette sécurité |
 | Frontend | **React 18 + Vite** | Composants → fin du monolithe ; build/HMR instantané |
@@ -97,11 +98,10 @@ Principes directeurs :
 | Qualité | **ESLint + Prettier** | Cohérence de code |
 | Infra | **Render + base managée persistante** | On garde Render qui fonctionne |
 
-> **Révision de reco vs version initiale** : la 1ʳᵉ version de ce cadrage proposait MongoDB « car déjà
-> branché ». L'audit montre que Mongo est **du code mort** → pas de sunk cost. Le domaine ERP est
-> **relationnel** (BOM, mouvements de stock = ledger, ventes, numéros de série) et exige des
-> **transactions** (Trunk Show concurrent). → **PostgreSQL + Prisma** devient ma reco. Mongo reste une
-> option valable si tu préfères le document store (décision §10-1).
+> **Pourquoi Postgres et pas Mongo** : Mongo était **du code mort** en V1 → pas de sunk cost. Le
+> domaine ERP est **relationnel** (BOM, mouvements de stock = ledger, ventes, numéros de série) et
+> exige des **transactions** (Trunk Show concurrent) — Postgres + Prisma (typé, pairé avec TypeScript)
+> est le meilleur socle. Base managée persistante (Render Postgres ou Neon).
 
 ### Modèle de données cible (entités)
 `products`/`variants` · `materials` + `stock_movements` (ledger) · `boms` (variant ↔ matières) ·
@@ -115,7 +115,7 @@ tiraboschi-erp/
 │   ├── src/
 │   │   ├── routes/           # pos, payments, shopify, stock, crm, admin, auth, events
 │   │   ├── services/         # logique métier (tax, sku, shopifyClient, stripe)
-│   │   ├── db/               # Prisma schema + migrations (ou ODM si Mongo)
+│   │   ├── db/               # Prisma schema + migrations
 │   │   ├── middleware/       # auth JWT, rateLimit, validation Zod
 │   │   └── server.ts
 │   └── tests/
@@ -135,6 +135,20 @@ tiraboschi-erp/
 
 ## 4. Périmètre V2
 
+### Source de vérité — stratégie par paliers (décision actée)
+La V2 doit être **conçue dès le départ pour que l'app devienne, à terme, le master** — mais en
+livrant par paliers pour ne pas tout bloquer :
+
+| Palier | Catalogue / produits | Inventaire (matières + pièces) | Master |
+|---|---|---|---|
+| **V2 — démarrage** | importé de **Shopify** | importé d'un **inventaire sur Google Drive** (one-shot + resync) | Shopify (lecture) |
+| **V2 — cible** | **créés dans l'app** (PLM) → push Shopify | **gérés dans l'app** (matières & pièces) → push Shopify | **l'app** |
+
+→ Conséquence d'architecture : la couche Shopify est encapsulée dans un **service de sync
+bidirectionnel** (un sens d'abord : Shopify→app ; l'autre sens activable sans refonte). Le modèle de
+données local est la **référence canonique** dès le départ, Shopify n'est qu'une projection.
+Une **intégration Google Drive** (MCP disponible) sert d'import initial de l'inventaire.
+
 ### Dans le périmètre (refonte du fonctionnel V1)
 POS wizard + Stripe Terminal S710 · liens Checkout + page `/pay/:id` (workaround WebView) ·
 taxes FR/EU/US (Draft Orders Shopify pour DDP) · SKU engine (avec incrément séquentiel `-01/-02`
@@ -144,20 +158,21 @@ auth bcrypt + JWT · i18n FR/EN.
 
 ### Nouveautés V2
 - **Événements / Trunk Shows** (lieu, date, vendeurs, rapport par événement) — cœur métier
-- Numéro de série unique par pièce (traçabilité luxe)
+- **Numéro de série unique par pièce + statuts/traçabilité** (standard luxe) — acté en V2
+- **Montée de version Shopify API** (2024-01 → récente) + **passage GraphQL** — acté en V2
+- **Import inventaire depuis Google Drive** (matières + pièces) — palier de démarrage
 - Auto-décrémentation stock à la vente (vente → décrément BOM)
 - PDF facture automatique après paiement
 - Dashboard analytics (graphiques, filtres vendeur/événement)
 - PWA installable + mode hors-ligne POS
-- Montée de version Shopify API (2024-01 → récente, GraphQL) — **à confirmer (§10-3)**
+- Sync Shopify encapsulée dans un service bidirectionnel (sens app→Shopify activable au palier cible)
 
 ### Hors périmètre / backlog
-- Sync bidirectionnelle complète PLM → Shopify (push produits) — selon §10-2
 - Passeport produit QR, suivi RMA complet, commissions vendeurs avancées
 
 ### Migration des données V1
-- **Backup impératif** des `data/*.json` actuels avant tout (potentiellement seules données vivantes).
-- Script d'import unique JSON → nouvelle base (one-shot, pas un `prestart` récurrent).
+- **Backup impératif** des `data/*.json` actuels + de l'inventaire Drive avant tout.
+- Scripts d'import **one-shot** (JSON V1 + Drive → Postgres), jamais en `prestart` récurrent.
 
 ---
 
@@ -165,10 +180,9 @@ auth bcrypt + JWT · i18n FR/EN.
 
 ### Phase 0 — Fondations (bloquant)
 - [ ] Récupérer / snapshot le code V1 (`legacy-v1/`) pour extraire la logique métier exacte
-- [ ] Trancher la base de données (§10-1)
 - [ ] Scaffolding repo V2 (api + web, TS, lint, CI)
-- [ ] `.env.example` complet + secrets hors code
-- [ ] Connexion base persistante + schéma + script d'import one-shot des `data/*.json`
+- [ ] Schéma Prisma + Postgres managé (Render/Neon) + `.env.example` + secrets hors code
+- [ ] Scripts d'import one-shot : `data/*.json` V1 + inventaire Google Drive → Postgres
 - [ ] Auth bcrypt + JWT + rate-limit
 
 ### Phase 1 — Cœur métier POS
@@ -176,11 +190,13 @@ auth bcrypt + JWT · i18n FR/EN.
 - [ ] Calcul taxes FR/EU/US (Sur Place + DDP) + tests
 - [ ] Wizard POS + Stripe Terminal S710
 - [ ] Liens de paiement + `/pay/:id` + webhook signé
-- [ ] Sync commande Shopify à la vente (avec pagination cursor)
+- [ ] **Client Shopify nouvelle version + GraphQL** (service de sync encapsulé, pagination cursor)
+- [ ] Sync commande Shopify à la vente
 
 ### Phase 2 — ERP / Stock (transactionnel)
-- [ ] Catalogue + fiches + BOM
-- [ ] Stock + mouvements (écritures atomiques) + alertes
+- [ ] Catalogue + fiches + BOM (modèle canonique local, projection Shopify)
+- [ ] Stock + mouvements (transactions atomiques) + alertes
+- [ ] **Numéro de série unique par pièce** + statuts (prod/QC/dispo/expédié/retour) + localisation
 - [ ] Auto-décrémentation stock à la vente
 - [ ] Import/Export Excel (UI)
 
@@ -190,10 +206,10 @@ auth bcrypt + JWT · i18n FR/EN.
 - [ ] Historique ventes + KPIs (source unique Shopify) + dashboard analytics
 - [ ] Admin users + config
 
-### Phase 4 — Mobile & traçabilité luxe
+### Phase 4 — Mobile + bascule master app
 - [ ] PWA + mode hors-ligne
-- [ ] Numéro de série par pièce + statuts + localisation
-- [ ] PDF facture + passeport produit QR
+- [ ] **Sens app→Shopify** : création produits PLM + gestion inventaires poussés vers Shopify (palier cible)
+- [ ] PDF facture + passeport produit QR (n° de série)
 
 ---
 
@@ -205,10 +221,13 @@ auth bcrypt + JWT · i18n FR/EN.
 ### Stripe Checkout (liens) — 🟢 très bien en V1
 `create_payment_link` + `/pay/:id` (contourne WebView WhatsApp/Instagram) + webhook **signé**.
 
-### Shopify Admin API — 🟡 v2024-01
-Store `tiraboschi-paris.myshopify.com` · Auth via `client_credentials` (à reconfirmer, §10) ·
+### Shopify Admin API — 🟡 v2024-01 → **à moderniser en V2**
+Store `tiraboschi-paris.myshopify.com` · Auth via `client_credentials` (à reconfirmer/sécuriser) ·
 Commandes/clients/inventaire/Draft Orders (taxes US) · **manque pagination cursor** (`limit=250`).
-V2 : monter de version + GraphQL (§10-3).
+**V2 actée** : montée de version récente + **GraphQL** + pagination cursor, encapsulé dans un service de sync.
+
+### Google Drive — import inventaire
+Inventaire matières + pièces stocké sur Drive → import one-shot + resync en V2 (intégration MCP disponible).
 
 ---
 
@@ -231,23 +250,20 @@ USR-PATTI Patti (caisse+ventes). **V2 : mots de passe hachés (bcrypt), jamais e
 | 2026-06-03 | TypeScript back + front | Domaine ERP complexe → typage = sécurité |
 | 2026-06-03 | React + Vite (abandon Vanilla JS) | Le monolithe `app.js` était le vrai problème |
 | 2026-06-03 | Tailwind + PWA, reprise DS « The Blue Sole » | POS tactile mobile-first / événementiel |
-| 2026-06-03 | Base relationnelle (Postgres+Prisma) **proposée** | Domaine relationnel + transactions ; Mongo = code mort (0 sunk cost) |
+| 2026-06-03 | **PostgreSQL + Prisma** | Domaine relationnel + transactions ; Mongo = code mort (0 sunk cost) |
 | 2026-06-03 | Shopify = source unique KPIs | Déjà en place en V1, à conserver |
 | 2026-06-03 | Trunk Shows = objet de 1ʳᵉ classe | Cœur métier événementiel |
+| 2026-06-03 | **Source de vérité par paliers** | Démarrage : catalogue Shopify + inventaire Drive ; cible : l'app master (modèle local canonique dès le départ) |
+| 2026-06-03 | **Shopify API montée de version + GraphQL en V2** | Éviter la dette ; sync encapsulée dans un service |
+| 2026-06-03 | **N° de série / traçabilité pièce dès la V2** | Standard luxe (SAV, anti-contrefaçon) |
+
+> Toutes les décisions de cadrage structurantes sont tranchées. Les arbitrages restants seront pris
+> à l'implémentation (ex. Render Postgres vs Neon, schéma de sync Drive).
 
 ---
 
-## 10. Décisions ouvertes à trancher
-1. **Base de données** : PostgreSQL+Prisma (reco) · MongoDB Atlas · SQLite + disque persistant Render ?
-2. **Sens de la sync Shopify** : Shopify reste master du catalogue/stock, ou l'ERP local devient master
-   avec push vers Shopify (sync bidirectionnelle) ?
-3. **Montée de version Shopify API** (2024-01 → récente + GraphQL) : in/out scope V2 ?
-4. **Traçabilité luxe** (numéro de série par pièce + QC) : V2 ou V3 ?
-
----
-
-## 11. Prochaine étape
+## 10. Prochaine étape
 1. Récupérer le code V1 en référence (snapshot `legacy-v1/` dans ce repo — voir reco précédente),
    pour extraire la logique métier exacte (formules taxes, `generateSKU`, payloads Shopify, `/pay/:id`).
-2. Trancher §10-1 (base de données).
+2. Localiser l'inventaire sur Google Drive (je peux le lire via MCP) pour cadrer le script d'import.
 3. Démarrer le **scaffolding Phase 0**.
