@@ -3,18 +3,19 @@ import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import { Placeholder } from '../pages/Placeholder';
 import { Inventaire } from '../pages/Inventaire';
+import { Collection } from '../pages/Collection';
 import type { Section } from '../sections';
 
 function Page({ section }: { section: Section }) {
   switch (section) {
     case 'inventory':
       return <Inventaire />;
+    case 'collection':
+      return <Collection />;
     case 'dashboard':
       return <Placeholder titleKey="nav.dashboard" />;
     case 'pos':
       return <Placeholder titleKey="nav.pos" />;
-    case 'collection':
-      return <Placeholder titleKey="nav.collection" />;
     case 'crm':
       return <Placeholder titleKey="nav.crm" />;
     case 'sales':

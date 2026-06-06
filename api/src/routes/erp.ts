@@ -1,9 +1,30 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
+import { assembleSku, deriveYearId, deriveSeasonId } from '../services/sku';
 
 export const erpRouter = Router();
 erpRouter.use(requireAuth);
+
+// ─── SKU : prévisualisation (règles du CDC) ─────────────────────────────────────
+erpRouter.post('/sku/preview', (req, res) => {
+  const b = req.body ?? {};
+  try {
+    const yearId = b.yearId || deriveYearId(b.year ?? '');
+    const seasonId = b.seasonId || deriveSeasonId(b.season ?? '');
+    const sku = assembleSku({
+      modelId: b.modelId ?? '',
+      yearId,
+      seasonId,
+      materialId: b.materialId ?? '',
+      optionId: b.optionId ?? '00',
+      colorId: b.colorId ?? '000',
+    });
+    res.json({ sku, yearId, seasonId });
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
 
 function fail(res: import('express').Response, err: unknown) {
   res.status(400).json({ error: (err as Error).message });
