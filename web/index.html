@@ -8,23 +8,31 @@
     <!-- Diagnostic classique (s'exécute toujours, même si le module ES échoue) -->
     <script>
       window.__errs = [];
+      // capture:true attrape aussi les erreurs de CHARGEMENT de ressources (script/css)
       window.addEventListener('error', function (e) {
-        window.__errs.push((e.message || 'erreur') + ' @ ' + (e.filename || '') + ':' + (e.lineno || ''));
-      });
+        var t = e.target || {};
+        window.__errs.push((e.message || 'load-error') + ' @ ' + (e.filename || t.src || t.href || ''));
+      }, true);
       window.addEventListener('unhandledrejection', function (e) {
         window.__errs.push('promise: ' + ((e.reason && e.reason.message) || String(e.reason)));
       });
       setTimeout(function () {
         var r = document.getElementById('root');
-        if (r && r.children.length === 0) {
+        if (!r || r.children.length > 0) return;
+        var s = document.querySelector('script[type="module"]');
+        var src = s ? s.src : '(aucun script module)';
+        function show(extra) {
           r.innerHTML =
-            '<pre style="color:#b3261e;white-space:pre-wrap;padding:16px;font:13px monospace;background:#fff">' +
-            "Diagnostic : le script principal ne s'est pas exécuté (#root vide).\n\n" +
-            'Erreurs captées :\n' +
-            (window.__errs.join('\n') || '(aucune)') +
-            '\n\nNavigateur : ' +
-            navigator.userAgent +
-            '</pre>';
+            '<pre style="color:#b3261e;white-space:pre-wrap;word-break:break-word;padding:16px;font:13px monospace;background:#fff">' +
+            "Diagnostic : module non exécuté (#root vide).\n\nsrc: " + src +
+            '\n\nErreurs : ' + (window.__errs.join(' | ') || '(aucune)') +
+            '\n\nUA : ' + navigator.userAgent + (extra || '') + '</pre>';
+        }
+        show('\n\n(test fetch en cours…)');
+        if (s) {
+          fetch(src).then(function (resp) {
+            show('\n\nFETCH status: ' + resp.status + '\ncontent-type: ' + resp.headers.get('content-type'));
+          }).catch(function (err) { show('\n\nFETCH erreur: ' + err.message); });
         }
       }, 4000);
     </script>

@@ -39,11 +39,15 @@ app.use(
 
 app.use(express.json());
 
-// Fichiers statiques du frontend. index.html en no-cache (les assets sont hashés, donc cachables).
+// Fichiers statiques du frontend. index.html en no-cache ; MIME JS/CSS forcé
+// (Chrome refuse un <script type=module> si le Content-Type n'est pas du JavaScript).
 app.use(
   express.static(WEB_DIST, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+      if (filePath.endsWith('.js') || filePath.endsWith('.mjs'))
+        res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
     },
   }),
 );
