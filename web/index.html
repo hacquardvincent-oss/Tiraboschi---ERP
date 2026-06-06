@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#050505" />
     <title>Tiraboschi POS / ERP</title>
+    <!-- Diagnostic classique (s'exécute toujours, même si le module ES échoue) -->
+    <script>
+      window.__errs = [];
+      window.addEventListener('error', function (e) {
+        window.__errs.push((e.message || 'erreur') + ' @ ' + (e.filename || '') + ':' + (e.lineno || ''));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        window.__errs.push('promise: ' + ((e.reason && e.reason.message) || String(e.reason)));
+      });
+      setTimeout(function () {
+        var r = document.getElementById('root');
+        if (r && r.children.length === 0) {
+          r.innerHTML =
+            '<pre style="color:#b3261e;white-space:pre-wrap;padding:16px;font:13px monospace;background:#fff">' +
+            "Diagnostic : le script principal ne s'est pas exécuté (#root vide).\n\n" +
+            'Erreurs captées :\n' +
+            (window.__errs.join('\n') || '(aucune)') +
+            '\n\nNavigateur : ' +
+            navigator.userAgent +
+            '</pre>';
+        }
+      }, 4000);
+    </script>
   </head>
   <body>
     <div id="root"></div>
