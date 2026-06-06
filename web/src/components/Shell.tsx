@@ -4,6 +4,7 @@ import { BottomNav } from './BottomNav';
 import { Placeholder } from '../pages/Placeholder';
 import { Inventaire } from '../pages/Inventaire';
 import { Collection } from '../pages/Collection';
+import { Admin } from '../pages/Admin';
 import type { Section } from '../sections';
 
 function Page({ section }: { section: Section }) {
@@ -12,6 +13,8 @@ function Page({ section }: { section: Section }) {
       return <Inventaire />;
     case 'collection':
       return <Collection />;
+    case 'admin':
+      return <Admin />;
     case 'dashboard':
       return <Placeholder titleKey="nav.dashboard" />;
     case 'pos':
@@ -20,8 +23,6 @@ function Page({ section }: { section: Section }) {
       return <Placeholder titleKey="nav.crm" />;
     case 'sales':
       return <Placeholder titleKey="nav.sales" />;
-    case 'admin':
-      return <Placeholder titleKey="nav.admin" />;
   }
 }
 

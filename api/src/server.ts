@@ -11,11 +11,13 @@ import { reconciliationRouter } from './routes/reconciliation';
 import { reconciliationUiRouter } from './routes/reconciliationUi';
 import { authRouter } from './routes/auth';
 import { erpRouter } from './routes/erp';
+import { refRouter } from './routes/ref';
 import { dbHealthRouter } from './routes/dbHealth';
 import { erpUiRouter } from './routes/erpUi';
 import { reconcile } from './services/reconciliation';
 import { sendAlert } from './services/alert';
 import { seedAdmin } from './services/seed';
+import { seedReferential } from './services/seedReferential';
 
 const app = express();
 
@@ -68,6 +70,7 @@ app.use('/api/reconciliation', reconciliationRouter);
 app.use('/reconciliation', reconciliationUiRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/erp', erpRouter);
+app.use('/api/ref', refRouter);
 app.use('/api/db', dbHealthRouter);
 app.use('/app', erpUiRouter);
 
@@ -104,6 +107,11 @@ async function initDatabase(): Promise<void> {
     await seedAdmin();
   } catch (e) {
     console.error('[seed] erreur :', (e as Error).message);
+  }
+  try {
+    await seedReferential();
+  } catch (e) {
+    console.error('[seed-ref] erreur :', (e as Error).message);
   }
 }
 

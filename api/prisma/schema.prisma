@@ -30,6 +30,23 @@ model User {
   updatedAt    DateTime @updatedAt
 }
 
+// Référentiel générique : alimente toutes les listes déroulantes des formulaires (Admin).
+// category ∈ models, years, seasons, options, optionTypes, colors, sizes, globalMaterials,
+// animalTypes, skinTypes, linings, materialDetails, suppliers, jewelry, origins, hsCodes, ateliers…
+model RefItem {
+  id        String   @id @default(cuid())
+  category  String
+  code      String // ID métier (ex. AA001, 999, H)
+  label     String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, code])
+  @@index([category])
+}
+
 // ─── RÉFÉRENTIELS ─────────────────────────────────────────────────────────────
 enum MaterialCategory {
   LEATHER // peaux
