@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiraboschi - Point of Sale</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=5">
+    <!-- Stripe SDKs -->
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://js.stripe.com/terminal/v1/"></script>
+    <!-- Google Maps Places API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places"></script>
+</head>
+<body>
+
+
+    <!-- Écran de Connexion (ID/MDP) -->
+    <div id="auth-screen" class="auth-screen active">
+        <div class="auth-glass">
+            <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iQ2FscXVlXzIiIGRhdGEtbmFtZT0iQ2FscXVlIDIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDU4Mi4zNyAxNzUuMjEiPgogIDxkZWZzPgogICAgPHN0eWxlPgogICAgICAuY2xzLTEgewogICAgICAgIGZvbnQtZmFtaWx5OiBQbGF5ZmFpckRpc3BsYXktUmVndWxhciwgJ1BsYXlmYWlyIERpc3BsYXknOwogICAgICAgIGZvbnQtc2l6ZTogMjYuMDhweDsKICAgICAgICBmb250LXZhcmlhdGlvbi1zZXR0aW5nczogJ3dnaHQnIDQwMDsKICAgICAgfQoKICAgICAgLmNscy0xLCAuY2xzLTIgewogICAgICAgIGZpbGw6ICNmZmY3ZWM7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxnPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJNODguMTYsNy42Yy0uNCwzLjgxLS42OCw3LjQ5LS44MywxMS4wNS0uMTUsMy41Ni0uMjMsNi4yOS0uMjMsOC4xOSwwLDIuNC4wNSw0LjY2LjE1LDYuNzYtMS4xOSwwLTIuMTcsMC0zLjgxLDAtLjYxLTQuNDUtMS4zNC04LjEzLTIuMi0xMS4wNC0xLjItNC4wNi0zLjMxLTYuOTktNi4zMS04Ljc5LTMuMDEtMS44LTcuNjYtMi43MS0xMy45OC0yLjcxaC04LjEydjg1LjUxYzAsNC4wMS4zOCw3LjAxLDEuMTMsOS4wMi43NSwyLjAxLDIuMjMsMy4zNiw0LjQzLDQuMDYsMi4yLjcsNS40MSwxLjE1LDkuNjIsMS4zNXYzLjAxYy0yLjYxLS4yLTUuOTEtLjMyLTkuOTItLjM4LTQuMDEtLjA1LTguMDctLjA4LTEyLjE3LS4wOC00LjUxLDAtOC43NC4wMy0xMi43LjA4LTMuOTYuMDUtNy4xNC4xOC05LjU0LjM4di0zLjAxYzQuMjEtLjIsNy40MS0uNjUsOS42Mi0xLjM1LDIuMi0uNywzLjY4LTIuMDUsNC40My00LjA2Ljc1LTIsMS4xMy01LjAxLDEuMTMtOS4wMlYxMS4wNWgtOC4xMmMtNi4yMSwwLTEwLjg0LjktMTMuOSwyLjcxLTMuMDYsMS44LTUuMTgsNC43My02LjM5LDguNzktLjg2LDIuOTItMS42LDYuNi0yLjIxLDExLjA0LTEuNCwwLTIuMjYsMC0zLjczLDAsLjA1LTIuMS4wOC00LjM2LjA4LTYuNzYsMC0xLjktLjA4LTQuNjMtLjIzLTguMTktLjE1LTMuNTYtLjQzLTcuMjQtLjgzLTExLjA1LDQuMjEuMSw4Ljc5LjIsMTMuNzUuMyw0Ljk2LjEsOS45NC4xNSwxNC45NS4xNWgyNy4yOGM0Ljk2LDAsOS45NC0uMDUsMTQuOTUtLjE1LDUuMDEtLjEsOS41Ny0uMiwxMy42Ny0uM1oiLz4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0iTTExNC40Nyw1MC43djUyLjFjMCwzLjM3LjcsNS42NiwyLjExLDYuODYsMS40LDEuMiwzLjc1LDEuODEsNy4wNCwxLjgxdjIuNTNjLTEuMzYtLjA4LTMuNDMtLjE4LTYuMi0uM3MtNS41Ni0uMTgtOC4zNi0uMTgtNS41LjA2LTguMy4xOGMtMi44MS4xMi00Ljg5LjIyLTYuMjYuM3YtMi41M2MzLjI5LDAsNS42My0uNiw3LjA0LTEuODEsMS40LTEuMiwyLjExLTMuNDksMi4xMS02Ljg2di0zNy42NmMwLTMuNjEtLjY0LTYuMjgtMS45My04LTEuMjgtMS43Mi0zLjY5LTIuNTktNy4yMi0yLjU5di0yLjUzYzIuNTcuMjQsNS4wNS4zNiw3LjQ2LjM2czQuNTUtLjE0LDYuNjgtLjQyYzIuMTItLjI4LDQuMDctLjcsNS44NC0xLjI2Wk0xMDguMjIsMjEuOTRjMi4wOCwwLDMuODkuNzYsNS40MiwyLjI5LDEuNTIsMS41MiwyLjI5LDMuMzMsMi4yOSw1LjQxcy0uNzYsMy44OS0yLjI5LDUuNDJjLTEuNTMsMS41Mi0zLjMzLDIuMjktNS40MiwyLjI5cy0zLjg5LS43Ni01LjQyLTIuMjljLTEuNTItMS41Mi0yLjI5LTMuMzMtMi4yOS01LjQycy43Ni0zLjg5LDIuMjktNS40MWMxLjUyLTEuNTIsMy4zMy0yLjI5LDUuNDItMi4yOVoiLz4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0iTTE2NS45Nyw1MC4zNGMyLjE3LDAsNC4wNy40NCw1LjcyLDEuMzIsMS42NC44OCwyLjkzLDIuMDMsMy44NSwzLjQzLjkyLDEuNCwxLjM4LDIuOTksMS4zOCw0Ljc1LDAsMi4wMS0uNjIsMy43Ny0xLjg2LDUuMjktMS4yNSwxLjUyLTIuOTEsMi4yOS00Ljk5LDIuMjktMS42OCwwLTMuMTctLjU0LTQuNDUtMS42Mi0xLjI4LTEuMDgtMS45My0yLjYzLTEuOTMtNC42MywwLTEuNTIuNDItMi44MywxLjI2LTMuOTEuODQtMS4wOCwxLjc4LTEuOTQsMi44My0yLjU5LS41Ni0uOC0xLjQtMS4yLTIuNTMtMS4yLTIuNDksMC00Ljc3Ljc0LTYuODYsMi4yMy0yLjA5LDEuNDktMy44NSwzLjM5LTUuMjksNS43Mi0xLjQ0LDIuMzMtMi41Nyw0Ljc5LTMuMzcsNy40LS44LDIuNjEtMS4yLDUuMDQtMS4yLDcuMjh2MjUuNTFjMCwzLjkzLDEuMTQsNi41NiwzLjQzLDcuODgsMi4yOSwxLjMyLDUuMzksMS45OSw5LjMzLDEuOTl2Mi41M2MtMS44NS0uMDgtNC40NS0uMTgtNy44Mi0uM3MtNi45NC0uMTgtMTAuNzEtLjE4Yy0yLjczLDAtNS40My4wNi04LjEyLjE4LTIuNjkuMTItNC43MS4yMi02LjA4LjN2LTIuNTNjMy4yOSwwLDUuNjQtLjYsNy4wNC0xLjgxLDEuNC0xLjIsMi4xMS0zLjQ5LDIuMTEtNi44NnYtMzcuNjZjMC0zLjYxLS42NC02LjI4LTEuOTMtOC0xLjI4LTEuNzItMy42OS0yLjU5LTcuMjItMi41OXYtMi41M2MyLjU3LjI0LDUuMDUuMzYsNy40Ni4zNnM0LjU1LS4xNCw2LjY4LS40MmMyLjEyLS4yOCw0LjA3LS43LDUuODQtMS4yNnYxNS4wNGMuODgtMi4zMywyLjE1LTQuNjcsMy43OS03LjA0LDEuNjQtMi4zNywzLjYzLTQuMzUsNS45Ni01Ljk2LDIuMzMtMS42LDQuODktMi40MSw3LjctMi40MVoiLz4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0iTTE5Ny45OCwxMTQuODNjLTMuMjksMC02LjE0LS42Mi04LjU0LTEuODYtMi40MS0xLjI0LTQuMjMtMi45OS01LjQ4LTUuMjQtMS4yNC0yLjI0LTEuODYtNC44NS0xLjg2LTcuODIsMC0zLjUzLjgyLTYuNDIsMi40Ny04LjY2LDEuNjQtMi4yNCwzLjc1LTQuMDUsNi4zMi01LjQyLDIuNTctMS4zNiw1LjI3LTIuNTEsOC4xMi0zLjQzLDIuODUtLjkyLDUuNTUtMS44MSw4LjEyLTIuNjUsMi41Ny0uODQsNC42Ny0xLjgyLDYuMzItMi45NSwxLjY0LTEuMTIsMi40Ny0yLjYxLDIuNDctNC40NXYtNy40NmMwLTMuMzctLjUtNS45NC0xLjUtNy43LTEtMS43Ni0yLjM1LTIuOTUtNC4wMy0zLjU1cy0zLjU3LS45LTUuNjYtLjktNC4xNS4yOC02LjQ0Ljg0Yy0yLjI5LjU2LTQuMTEsMS43My01LjQ3LDMuNDksMS41Mi4zMiwyLjg1LDEuMTIsMy45NywyLjQxLDEuMTIsMS4yOCwxLjY4LDIuOTMsMS42OCw0Ljkzcy0uNjQsMy41OS0xLjkzLDQuNzVjLTEuMjgsMS4xNi0yLjkzLDEuNzQtNC45MywxLjc0LTIuMzMsMC00LjAzLS43NC01LjExLTIuMjMtMS4wOC0xLjQ4LTEuNjItMy4xNS0xLjYyLTQuOTksMC0yLjA4LjUyLTMuNzcsMS41Ni01LjA1LDEuMDQtMS4yOCwyLjM2LTIuNDksMy45Ny0zLjYxLDEuODQtMS4yOCw0LjIzLTIuMzksNy4xNi0zLjMxLDIuOTMtLjkyLDYuMjQtMS4zOCw5LjkzLTEuMzgsMy4yOSwwLDYuMS4zOCw4LjQyLDEuMTQsMi4zMy43Niw0LjI1LDEuODcsNS43OCwzLjMxLDIuMDksMS45MywzLjQ1LDQuMjcsNC4wOSw3LjA0LjY0LDIuNzcuOTYsNi4wOC45Niw5LjkzdjMzLjQ1YzAsMi4wMS4zLDMuNDUuOSw0LjMzLjYuODgsMS41NCwxLjMyLDIuODMsMS4zMi44OCwwLDEuNzItLjIsMi41My0uNi44LS40LDEuNzYtMS4wNCwyLjg5LTEuOTNsMS4zMiwyLjA1Yy0xLjY4LDEuMjgtMy4yOSwyLjM1LTQuODEsMy4xOS0xLjUzLjg0LTMuNTcsMS4yNi02LjE0LDEuMjYtMi4zMywwLTQuMjUtLjQtNS43OC0xLjItMS41Mi0uOC0yLjY3LTEuOTktMy40My0zLjU1LS43Ni0xLjU2LTEuMTQtMy41NS0xLjE0LTUuOTYtMi4xNywzLjYxLTQuNzUsNi4zLTcuNzYsOC4wNi0zLjAxLDEuNzctNi40LDIuNjUtMTAuMTcsMi42NVpNMjAyLjMxLDExMC4wMmMyLjY1LDAsNS4xMS0uNzYsNy40LTIuMjksMi4yOS0xLjUyLDQuMzUtMy44MSw2LjItNi44NnYtMjMuNThjLS45NiwxLjM3LTIuMzcsMi41MS00LjIxLDMuNDMtMS44NS45Mi0zLjg1LDEuODUtNi4wMiwyLjc3LTIuMTcuOTItNC4yMywyLjAxLTYuMiwzLjI1LTEuOTcsMS4yNC0zLjU5LDIuODctNC44Nyw0Ljg3LTEuMjgsMi4wMS0xLjkzLDQuNjEtMS45Myw3Ljgycy44Niw1Ljc4LDIuNTksNy43YzEuNzIsMS45Myw0LjA3LDIuODksNy4wNCwyLjg5WiIvPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJNMjU2LjU4LDE5Ljc3djg3Ljk2Yy0xLjA0Ljg4LTIuMTEsMS43OS0zLjE5LDIuNzEtMS4wOC45Mi0yLjE1LDEuODMtMy4xOSwyLjcxLTEuMDQuODgtMi4xMywxLjgxLTMuMjUsMi43N2wtMi4wNS0uODRjLjMyLTEuMTIuNTQtMi4yNy42Ni0zLjQzLjEyLTEuMTYuMTgtMi4zNS4xOC0zLjU1VjM0LjIxYzAtMy42MS0uNjQtNi4yOC0xLjkzLTgtMS4yOC0xLjcyLTMuNjktMi41OS03LjIyLTIuNTl2LTIuNTNjMi41Ny4yNCw1LjA1LjM2LDcuNDYuMzZzNC41NS0uMTQsNi42OC0uNDJjMi4xMi0uMjgsNC4wNy0uNyw1Ljg0LTEuMjZaTTI3NS4zNSw1MC4zNGM2LjU4LDAsMTIuMDMsMi43MSwxNi4zNyw4LjEyLDQuMzMsNS40MSw2LjUsMTMuNjIsNi41LDI0LjYxLDAsNy4yMi0xLjIyLDEzLjI2LTMuNjcsMTguMTEtMi40NSw0Ljg1LTUuNzIsOC40OC05LjgxLDEwLjg5LTQuMDksMi40MS04LjU0LDMuNjEtMTMuMzYsMy42MS00LjAxLDAtNy44OC0xLjE0LTExLjYxLTMuNDMtMy43My0yLjI5LTYuNTItNS42Ny04LjM2LTEwLjE3bDIuNDEsMS4zMmMyLDMuMjEsNC40OSw1LjYsNy40Niw3LjE2LDIuOTcsMS41Niw2LjAyLDIuMzUsOS4xNCwyLjM1LDUuMzcsMCw5LjQtMi40MywxMi4wOS03LjI4LDIuNjktNC44NSw0LjAzLTEyLjM3LDQuMDMtMjIuNTYsMC02LjUtLjUyLTExLjkxLTEuNTYtMTYuMjQtMS4wNC00LjMzLTIuNjUtNy41Ni00LjgxLTkuNjktMi4xNy0yLjEyLTQuOTMtMy4xOS04LjMtMy4xOS0zLjY5LDAtNy4xMiwxLjY3LTEwLjI5LDQuOTktMy4xNywzLjMzLTUuMTEsOC4yLTUuODQsMTQuNjJsLTEuNDQtMS42OGMuODgtNi44MiwzLjI3LTEyLjExLDcuMTYtMTUuODgsMy44OS0zLjc3LDguNTItNS42NiwxMy45LTUuNjZaIi8+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Ik0zMzUuNjQsNTAuMzRjNS4xMywwLDkuNzUsMS4xMiwxMy44NCwzLjM3LDQuMDksMi4yNSw3LjM2LDUuNzgsOS44MSwxMC41OSwyLjQ1LDQuODEsMy42NywxMS4wNywzLjY3LDE4Ljc3cy0xLjIyLDEzLjk0LTMuNjcsMTguNzFjLTIuNDUsNC43Ny01LjcyLDguMjgtOS44MSwxMC41My00LjA5LDIuMjUtOC43MSwzLjM3LTEzLjg0LDMuMzdzLTkuNjUtMS4xMi0xMy43OC0zLjM3Yy00LjEzLTIuMjUtNy40Mi01Ljc2LTkuODctMTAuNTMtMi40NS00Ljc3LTMuNjctMTEuMDEtMy42Ny0xOC43MXMxLjIyLTEzLjk2LDMuNjctMTguNzdjMi40NS00LjgxLDUuNzQtOC4zNCw5Ljg3LTEwLjU5LDQuMTMtMi4yNCw4LjcyLTMuMzcsMTMuNzgtMy4zN1pNMzM1LjY0LDUyLjc0Yy00LjU3LDAtOC4zMiwyLjM3LTExLjI1LDcuMS0yLjkzLDQuNzMtNC4zOSwxMi40Ny00LjM5LDIzLjIyczEuNDYsMTguNDcsNC4zOSwyMy4xNmMyLjkzLDQuNjksNi42OCw3LjA0LDExLjI1LDcuMDRzOC4zMi0yLjM1LDExLjI1LTcuMDRjMi45My00LjY5LDQuMzktMTIuNDEsNC4zOS0yMy4xNnMtMS40Ni0xOC40OS00LjM5LTIzLjIyYy0yLjkzLTQuNzMtNi42OC03LjEtMTEuMjUtNy4xWiIvPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJNMzkyLjQzLDUwLjM0YzMuMjEsMCw1Ljk0LjUyLDguMTgsMS41NiwyLjI0LDEuMDQsMy44OSwyLjAxLDQuOTMsMi44OSwyLjY1LDIuMTcsNC4yNS43Miw0LjgxLTQuMzNoMi43N2MtLjE2LDIuMjUtLjI4LDQuOTItLjM2LDgtLjA4LDMuMDktLjEyLDcuMjQtLjEyLDEyLjQ1aC0yLjc3Yy0uNDgtMi45Ny0xLjMxLTUuODUtMi40Ny04LjY2LTEuMTYtMi44MS0yLjg3LTUuMTEtNS4xMS02LjkyLTIuMjUtMS44MS01LjE3LTIuNzEtOC43OC0yLjcxLTIuODEsMC01LjE2Ljc4LTcuMDQsMi4zNS0xLjg5LDEuNTYtMi44MywzLjg3LTIuODMsNi45MiwwLDIuNDEuNzIsNC40NywyLjE3LDYuMiwxLjQ0LDEuNzMsMy4zMywzLjMzLDUuNjYsNC44MSwyLjMzLDEuNDksNC44NSwzLjExLDcuNTgsNC44NywzLjA1LDEuOTMsNS44MiwzLjg5LDguMyw1LjksMi40OSwyLjAxLDQuNDcsNC4yMSw1Ljk2LDYuNjIsMS40OCwyLjQxLDIuMjMsNS4yNiwyLjIzLDguNTQsMCwzLjY5LS45Niw2Ljc4LTIuODksOS4yNy0xLjkzLDIuNDktNC40Myw0LjM3LTcuNTIsNS42Ni0zLjA5LDEuMjgtNi40OCwxLjkzLTEwLjE3LDEuOTMtMS43NywwLTMuNDMtLjE0LTQuOTktLjQyLTEuNTYtLjI4LTMuMDctLjctNC41MS0xLjI2LS44LS40LTEuNjItLjg4LTIuNDctMS40NC0uODQtLjU2LTEuNjctMS4xNi0yLjQ3LTEuODEtLjgtLjY0LTEuNTItLjYyLTIuMTcuMDYtLjY0LjY4LTEuMTMsMi4wMy0xLjQ0LDQuMDNoLTIuNzdjLjE2LTIuNTcuMjgtNS42OS4zNi05LjM5LjA4LTMuNjkuMTItOC41OC4xMi0xNC42OGgyLjc3Yy41Niw0LjQ5LDEuMzYsOC40MiwyLjQxLDExLjc5LDEuMDQsMy4zNywyLjY5LDYsNC45Myw3Ljg4LDIuMjUsMS44OSw1LjM3LDIuODMsOS4zOSwyLjgzLDEuNiwwLDMuMjMtLjM2LDQuODctMS4wOCwxLjY0LS43MiwzLjAzLTEuOTMsNC4xNS0zLjYxLDEuMTItMS42OCwxLjY4LTMuOTMsMS42OC02Ljc0LDAtMy41My0xLjI4LTYuNDItMy44NS04LjY2LTIuNTctMi4yNC01LjgyLTQuNjEtOS43NS03LjEtMi44OS0xLjg0LTUuNi0zLjY5LTguMTItNS41My0yLjUzLTEuODQtNC41Ny0zLjkzLTYuMTQtNi4yNi0xLjU2LTIuMzMtMi4zNS01LjEzLTIuMzUtOC40MiwwLTMuNjEuODItNi41NiwyLjQ3LTguODQsMS42NC0yLjI5LDMuODMtMy45Nyw2LjU2LTUuMDUsMi43My0xLjA4LDUuNjYtMS42Miw4Ljc4LTEuNjJaIi8+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Ik00NTMuNTYsNTAuMzRjMi41NywwLDUuMDUuMzIsNy40Ni45NiwyLjQxLjY0LDQuNTcsMS42MSw2LjUsMi44OSwxLjg0LDEuMiwzLjI1LDIuNTksNC4yMSw0LjE1Ljk2LDEuNTYsMS40NCwzLjI3LDEuNDQsNS4xMSwwLDIuMTctLjYsMy44My0xLjgxLDQuOTktMS4yLDEuMTYtMi43MywxLjc0LTQuNTcsMS43NHMtMy4zMS0uNTItNC42My0xLjU2Yy0xLjMyLTEuMDQtMS45OS0yLjUzLTEuOTktNC40NXMuNS0zLjMzLDEuNS00LjQ1YzEtMS4xMiwyLjE4LTEuODQsMy41NS0yLjE3LS44LTEuNDQtMi4yMy0yLjY1LTQuMjctMy42MXMtNC4yMy0xLjQ0LTYuNTYtMS40NGMtMi4wMSwwLTQuMDEuNDgtNi4wMiwxLjQ0LTIuMDEuOTYtMy44NSwyLjU1LTUuNTQsNC43NS0xLjY4LDIuMjEtMy4wNSw1LjIyLTQuMDksOS4wMi0xLjA0LDMuODEtMS41Niw4LjU2LTEuNTYsMTQuMjYsMCw3LjA2LjgsMTIuNjgsMi40MSwxNi44NSwxLjYsNC4xNywzLjcxLDcuMTYsNi4zMiw4Ljk3LDIuNjEsMS44MSw1LjQ4LDIuNzEsOC42LDIuNzEsMi4wOCwwLDQuMjEtLjQsNi4zOC0xLjIsMi4xNy0uOCw0LjIxLTIuMTEsNi4xNC0zLjkxLDEuOTMtMS44MSwzLjU3LTQuMjMsNC45My03LjI4bDIuMjkuODRjLS44LDIuNTctMi4xMyw1LjE2LTMuOTcsNy43Ni0xLjg1LDIuNjEtNC4yNSw0Ljc1LTcuMjIsNi40NC0yLjk3LDEuNjgtNi42MiwyLjUzLTEwLjk1LDIuNTMtNC45NywwLTkuNDctMS4yOC0xMy40OC0zLjg1LTQuMDEtMi41Ny03LjItNi4yNC05LjU3LTExLjAxLTIuMzctNC43Ny0zLjU1LTEwLjQ1LTMuNTUtMTcuMDNzMS4xOC0xMi4zNywzLjU1LTE3LjM5YzIuMzctNS4wMSw1LjY3LTguOTQsOS45My0xMS43OSw0LjI1LTIuODUsOS4xLTQuMjcsMTQuNTYtNC4yN1oiLz4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0iTTQ5OS42NCwxOS43N3Y0NWMyLjA4LTUuNDUsNC45OS05LjIyLDguNzItMTEuMzEsMy43My0yLjA4LDcuNjQtMy4xMywxMS43My0zLjEzLDMuMDUsMCw1LjYuNCw3LjY0LDEuMiwyLjA1LjgsMy43NSwxLjkzLDUuMTEsMy4zNywxLjUyLDEuNjEsMi42MSwzLjYxLDMuMjUsNi4wMi42NCwyLjQxLjk2LDUuNjYuOTYsOS43NXYzMi4xM2MwLDMuMzcuNyw1LjY2LDIuMTEsNi44NiwxLjQsMS4yLDMuNzUsMS44MSw3LjA0LDEuODF2Mi41M2MtMS4zNi0uMDgtMy40NS0uMTgtNi4yNi0uMy0yLjgxLS4xMi01LjUzLS4xOC04LjE4LS4xOHMtNS4yNC4wNi03Ljc2LjE4Yy0yLjUzLjEyLTQuNDMuMjItNS43Mi4zdi0yLjUzYzIuODksMCw0LjkzLS42LDYuMTQtMS44MXMxLjgxLTMuNDksMS44MS02Ljg2di0zNC43OGMwLTIuNDktLjItNC43Ny0uNi02Ljg2LS40LTIuMDktMS4zMS0zLjc3LTIuNzEtNS4wNS0xLjQtMS4yOC0zLjU1LTEuOTMtNi40NC0xLjkzLTMuMjksMC02LjIuOTItOC43MiwyLjc3LTIuNTMsMS44NS00LjUxLDQuNDEtNS45Niw3LjctMS40NCwzLjI5LTIuMTcsNy4wNi0yLjE3LDExLjMxdjI2LjgzYzAsMy4zNy42LDUuNjYsMS44MSw2Ljg2czMuMjUsMS44MSw2LjE0LDEuODF2Mi41M2MtMS4yOC0uMDgtMy4xOS0uMTgtNS43Mi0uMy0yLjUzLS4xMi01LjExLS4xOC03Ljc2LS4xOHMtNS4zNy4wNi04LjE4LjE4Yy0yLjgxLjEyLTQuODkuMjItNi4yNi4zdi0yLjUzYzMuMjksMCw1LjY0LS42LDcuMDQtMS44MSwxLjQtMS4yLDIuMTEtMy40OSwyLjExLTYuODZWMzQuMjFjMC0zLjYxLS42NC02LjI4LTEuOTMtOC0xLjI4LTEuNzItMy42OS0yLjU5LTcuMjItMi41OXYtMi41M2MyLjU3LjI0LDUuMDUuMzYsNy40Ni4zNnM0LjU1LS4xNCw2LjY4LS40MmMyLjEyLS4yOCw0LjA3LS43LDUuODQtMS4yNloiLz4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0iTTU3MC4yOCw1MC43djUyLjFjMCwzLjM3LjcsNS42NiwyLjExLDYuODYsMS40LDEuMiwzLjc1LDEuODEsNy4wNCwxLjgxdjIuNTNjLTEuMzctLjA4LTMuNDMtLjE4LTYuMi0uM3MtNS41Ni0uMTgtOC4zNi0uMTgtNS41LjA2LTguMy4xOGMtMi44MS4xMi00Ljg5LjIyLTYuMjYuM3YtMi41M2MzLjI5LDAsNS42My0uNiw3LjA0LTEuODEsMS40LTEuMiwyLjExLTMuNDksMi4xMS02Ljg2di0zNy42NmMwLTMuNjEtLjY0LTYuMjgtMS45Mi04LTEuMjgtMS43Mi0zLjY5LTIuNTktNy4yMi0yLjU5di0yLjUzYzIuNTcuMjQsNS4wNS4zNiw3LjQ2LjM2czQuNTUtLjE0LDYuNjgtLjQyYzIuMTItLjI4LDQuMDctLjcsNS44NC0xLjI2Wk01NjQuMDIsMjEuOTRjMi4wOSwwLDMuODkuNzYsNS40MiwyLjI5LDEuNTIsMS41MiwyLjI5LDMuMzMsMi4yOSw1LjQxcy0uNzYsMy44OS0yLjI5LDUuNDJjLTEuNTMsMS41Mi0zLjMzLDIuMjktNS40MiwyLjI5cy0zLjg5LS43Ni01LjQyLTIuMjljLTEuNTItMS41Mi0yLjI5LTMuMzMtMi4yOS01LjQycy43Ni0zLjg5LDIuMjktNS40MWMxLjUyLTEuNTIsMy4zMy0yLjI5LDUuNDItMi4yOVoiLz4KICA8L2c+CiAgPHRleHQgY2xhc3M9ImNscy0xIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMzAuNzggMTY4LjkzKSI+PHRzcGFuIHg9IjAiIHk9IjAiPlNpbmNlIDE5MDQ8L3RzcGFuPjwvdGV4dD4KPC9zdmc+" alt="Tiraboschi" style="max-height: 80px; margin-bottom: 24px;">
+            <h2>Connexion</h2>
+            <p style="margin-bottom: 24px;">Accès au système de caisse</p>
+            
+            <form id="login-form" onsubmit="event.preventDefault(); login(document.getElementById('login-email').value, document.getElementById('login-password').value);">
+                <div class="input-group" style="margin-bottom: 16px;">
+                    <input type="text" id="login-email" class="custom-input" placeholder="Identifiant" autocomplete="username" required>
+                </div>
+                <div class="input-group" style="margin-bottom: 16px;">
+                    <input type="password" id="login-password" class="custom-input" placeholder="Mot de passe" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn primary large" style="width: 100%;">Se connecter</button>
+            </form>
+            
+            <a href="#" onclick="forgotPassword()" style="display: block; margin-top: 16px; color: var(--text-muted); font-size: 0.9rem; text-decoration: underline;">Mot de passe oublié ?</a>
+        </div>
+    </div>
+
+    <!-- Traduction native gérée dans app.js -->    <main class="glass-container hidden" id="main-app">
+        <header style="padding-bottom: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <div class="logo" style="justify-content: flex-start; width:100%;">
+                <img src="logo.png" alt="Tiraboschi" style="max-height: 40px; cursor: pointer;" onclick="showSection('section-dashboard')">
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <div class="header-badges" style="display:flex; flex-direction:column; gap:4px;">
+                    <div id="connection-status-sdk" class="status-badge connected" style="font-size: 0.7rem; padding: 4px 8px;">
+                        <span class="dot"></span> SDK
+                    </div>
+                    <div id="connection-status" class="status-badge disconnected" style="cursor:pointer; font-size: 0.7rem; padding: 4px 8px;" title="Cliquez pour reconnecter">
+                        <span class="dot"></span> TPE
+                    </div>
+                </div>
+                <button id="btn-lang-toggle" class="btn secondary" onclick="toggleLanguage()" style="padding: 0 4px; font-size: 1.5rem; border-color: transparent; background: transparent;">🇫🇷</button>
+            </div>
+        </header>
+
+        <!-- Section 0: Dashboard (Page de garde) -->
+        <section id="section-dashboard" class="app-section">
+            <h2 id="dashboard-welcome" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 16px;">Bonjour Vendeur</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-label">Aujourd'hui</span>
+                    <span class="stat-value" id="stat-daily">0.00$</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Cette Semaine</span>
+                    <span class="stat-value" id="stat-weekly">0.00$</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Ce Mois</span>
+                    <span class="stat-value" id="stat-monthly">0.00$</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Base Clients</span>
+                    <span class="stat-value" id="stat-crm">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Emails Opt-in</span>
+                    <span class="stat-value" id="stat-emails-clients">0</span>
+                </div>
+            </div>
+            
+            <div class="quick-actions" style="margin-top:24px;">
+                <h3>Actions Rapides</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <button class="btn primary highlight-btn" onclick="document.querySelector('.nav-btn[data-target=\'section-payment\']').click()"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-cart-icon lucide-shopping-cart" style="margin-right: 6px;"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg> Nouvelle Vente</button>
+                    <button class="btn secondary" onclick="document.querySelector('.nav-btn[data-target=\'section-inventory\']').click()"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-handbag-icon lucide-handbag" style="margin-right: 6px;"><path d="M2.048 18.566A2 2 0 0 0 4 21h16a2 2 0 0 0 1.952-2.434l-2-9A2 2 0 0 0 18 8H6a2 2 0 0 0-1.952 1.566z"/><path d="M8 11V6a4 4 0 0 1 8 0v5"/></svg> Voir Stock</button>
+                </div>
+            </div>
+
+            <div class="recent-sales-section" style="margin-top:32px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3>Dernières Transactions</h3>
+                    <button class="btn secondary small-btn" onclick="document.querySelector('.nav-btn[data-target=\'section-history\']').click()">Tout voir</button>
+                </div>
+                <div id="dashboard-recent-sales" class="list-container">
+                    <p class="loading-text">Aucune transaction récente à afficher.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 1: Caisse (Panier & Catalogue) -->
+        <section id="section-payment" class="app-section active">
+            <h2 style="display:flex; justify-content:space-between;">
+                Nouvelle Vente
+                <span id="current-vendor" style="display:none;"></span>
+            </h2>
+            
+            <div class="currency-selector">
+                <button class="btn-toggle active" id="btn-usd" data-currency="usd">USD (Catalogue US)</button>
+                <button class="btn-toggle" id="btn-eur" data-currency="eur">EUR (Catalogue FR)</button>
+            </div>
+            
+            <!-- Informations Client -->
+            <div class="customer-section">
+                <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                    <h3>Client</h3>
+                    <button id="btn-open-customers-tab" class="btn secondary small-btn">🔍 Chercher Client</button>
+                </div>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <input type="text" id="cust-firstname" placeholder="Prénom" class="custom-input" autocomplete="off">
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="cust-lastname" placeholder="Nom" class="custom-input" autocomplete="off">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <input type="email" id="cust-email" placeholder="Email (Obligatoire pour reçu)" class="custom-input" autocomplete="off">
+                </div>
+                <div class="form-grid-phone">
+                    <select id="cust-phone-ext" class="custom-input select-ext">
+                        <option value="+1">🇺🇸 +1</option>
+                        <option value="+33" selected>🇫🇷 +33</option>
+                    </select>
+                    <input type="tel" id="cust-phone" placeholder="Téléphone" class="custom-input">
+                </div>
+                <div class="input-group">
+                    <input type="text" id="cust-address" placeholder="Adresse (Ligne 1)" class="custom-input" autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <input type="text" id="cust-address2" placeholder="Appartement, suite, etc. (Optionnel)" class="custom-input" autocomplete="off">
+                </div>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <input type="text" id="cust-city" placeholder="Ville" class="custom-input" autocomplete="off">
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="cust-zip" placeholder="Code Postal (ex: 10001)" class="custom-input" autocomplete="off">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <input type="text" id="cust-state" placeholder="État / Province" class="custom-input">
+                    </div>
+                    <div class="input-group">
+                        <select id="cust-country" class="custom-input">
+                            <option value="US" selected>États-Unis</option>
+                            <option value="FR">France</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="checkbox-group" style="margin-top:12px;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cust-accepts-email" checked> Accepte le marketing par email (RGPD)
+                    </label>
+                    <label class="checkbox-label" style="margin-top:8px;">
+                        <input type="checkbox" id="cust-accepts-sms" checked> Accepte le marketing par SMS (RGPD)
+                    </label>
+                </div>
+
+                <div class="input-group" style="margin-top:12px;">
+                    <textarea id="cust-note" placeholder="Notes sur le client (goûts, habitudes...)" class="custom-input" style="height:80px;"></textarea>
+                </div>
+
+                <div style="margin-top: 16px;">
+                    <button id="btn-validate-cust" class="btn primary" style="width: 100%;">Valider l'adresse (Calcul des Taxes)</button>
+                </div>
+
+                <!-- Le bouton a été retiré pour permettre un affichage permanent du catalogue -->
+            </div>
+
+            <!-- Catalogue Produits -->
+            <div id="catalog-container" class="catalog-section" style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3>Offre</h3>
+                    <button type="button" id="btn-custom-product" class="btn primary" style="width:auto; padding: 0 16px;">+ Pièce hors catalogue</button>
+                </div>
+                
+                <!-- VOLET INLINE POUR PIECE HORS CATALOGUE (Remplace la modale) -->
+                <div id="inline-custom-product" class="hidden" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--primary); border-radius: 4px; padding: 16px; margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 12px; color: var(--primary);">Création Pièce hors catalogue</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Ces informations seront synchronisées avec Shopify.</p>
+                    <div class="form-grid">
+                        <div class="input-group" style="grid-column: 1 / -1;">
+                            <label>Titre de l'article (Shopify)</label>
+                            <input type="text" id="inline-custom-item-name" class="custom-input" placeholder="ex: Commande spéciale Olympe">
+                        </div>
+                        <div class="input-group">
+                            <label>Prix HT</label>
+                            <input type="number" id="inline-custom-item-price" class="custom-input" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:12px; margin-top:16px;">
+                        <button class="btn primary" onclick="addInlineCustomItemToCart()" style="flex:2;">Valider et Ajouter au Panier</button>
+                        <button class="btn secondary" onclick="document.getElementById('inline-custom-product').classList.add('hidden')" style="flex:1;">Annuler</button>
+                    </div>
+                </div>
+
+                <div class="search-bar-premium" style="margin-bottom: 24px;">
+                    <div class="input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="search-catalog" placeholder="Rechercher produit..." class="premium-input">
+                    </div>
+                    <div class="search-actions">
+                        <button id="btn-search-catalog" class="btn primary">Rechercher</button>
+                        <button id="btn-reset-catalog" class="btn secondary">Réinitialiser</button>
+                    </div>
+                </div>
+                <div id="pos-wizard">
+                    <div class="pos-breadcrumbs" id="pos-breadcrumbs" style="margin-bottom: 20px; font-weight: bold; font-size: 1.1rem; color: #d3b482;">
+                        <span id="bc-model">1. Choix du modèle</span>
+                    </div>
+                    
+                    <div id="pos-step-1" class="pos-step">
+                        <div class="product-grid" id="pos-grid-models"></div>
+                    </div>
+                    
+                    <div id="pos-step-2" class="pos-step hidden">
+                        <div class="product-grid" id="pos-grid-materials"></div>
+                        <button class="btn secondary" onclick="posGoBack(1)" style="margin-top: 20px;">Retour aux modèles</button>
+                    </div>
+                    
+                    <div id="pos-step-3" class="pos-step hidden">
+                        <div class="product-grid" id="pos-grid-options"></div>
+                        <button class="btn secondary" onclick="posGoBack(2)" style="margin-top: 20px;">Retour aux matières</button>
+                    </div>
+
+                    <div id="pos-step-4" class="pos-step hidden">
+                        <div class="product-grid" id="pos-grid-colors"></div>
+                        <button class="btn secondary" onclick="posGoBack(3)" style="margin-top: 20px;">Retour aux options</button>
+                    </div>
+
+                    <div id="pos-step-5" class="pos-step hidden">
+                        <div class="checkout-options-grid" id="pos-checkout-modes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <!-- Dynamique -->
+                        </div>
+                        <button class="btn secondary" onclick="posGoBack(4)" style="margin-top: 20px;">Retour aux couleurs</button>
+                    </div>
+                </div>
+
+                <div class="input-group" style="margin-top:20px;">
+                    <p style="color: var(--primary-color); font-size: 0.9rem; font-style: italic; margin-bottom: 12px; font-weight: 500;">
+                        ⚠️ Saisissez le code postal et la ville/État (Zip Code & City/State) du client plus haut pour connaître et appliquer les Sales Tax.
+                    </p>
+                    <h3>Note sur la commande</h3>
+                    <textarea id="order-note" placeholder="Instructions spéciales, options choisies..." class="custom-input" style="height:80px;"></textarea>
+                </div>
+            </div>
+
+            <!-- Résumé Panier -->
+            <div class="cart-summary">
+                <div id="cart-items-list" style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+                    <!-- Détail du panier injecté dynamiquement -->
+                </div>
+                <div class="cart-summary-details" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px; font-size: 0.95rem;">
+                    <!-- Subtotal removed per user request -->
+                    <!-- Shipping removed per user request (bundled in price) -->
+                    <div style="display:flex; justify-content:space-between; color: var(--text-muted);"><span>Duties (Incluses dans le prix)</span><span id="cart-duties">Incluses</span></div>
+                    <div style="display:flex; justify-content:space-between; color: var(--text-muted);"><span>Sales Tax (via Shopify) <small id="cart-tax-zone"></small></span><span id="cart-tax">$0.00</span></div>
+                    <div id="cart-tax-lines" style="display:none; flex-direction:column; gap:4px; font-size: 0.85em; margin-left: 10px; color: #888;"></div>
+                </div>
+                <div class="cart-total" style="border-top:2px solid var(--border-color); padding-top:16px; font-weight:bold; font-size:1.2em;">
+                    <span>TOTAL À ENCAISSER (USD)</span>
+                    <span id="cart-total-amount">$0.00</span>
+                </div>
+                <button id="btn-charge" class="btn primary large" disabled>Lancer l'encaissement sur le TPE</button>
+                <button id="btn-payment-link" class="btn secondary large" style="margin-top: 12px; width: 100%;" disabled onclick="generatePaymentLink()">Générer Lien de Paiement (WhatsApp/Email)</button>
+                
+                <!-- VOLET INLINE: Lien de Paiement -->
+                <div id="inline-payment-link" class="hidden" style="margin-top: 16px; background: rgba(99, 91, 255, 0.05); border: 1px solid var(--glass-border); border-left: 4px solid var(--primary); border-radius: 4px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="color: var(--primary); margin: 0; font-size: 0.95rem;">Lien de Paiement Généré</h3>
+                        <button onclick="document.getElementById('inline-payment-link').classList.add('hidden')" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem;">×</button>
+                    </div>
+                    
+                    <div class="input-group" style="margin-bottom: 12px;">
+                        <input type="text" id="generated-payment-link" class="custom-input" style="font-size: 0.85rem; padding: 10px; font-family: monospace; color: var(--primary); background: rgba(0,0,0,0.3);" readonly>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button class="btn primary" onclick="copyPaymentLink()" style="padding: 10px; font-size: 0.85rem;">📋 Copier</button>
+                        <button class="btn primary" onclick="shareWhatsapp()" style="padding: 10px; font-size: 0.85rem; background: #25D366; border-color: #25D366; color: white;">💬 WhatsApp</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loader et Statut -->
+            <div id="payment-status" class="payment-status hidden">
+                <div class="icon-container"></div>
+                <h3 id="status-title">En attente</h3>
+                <p id="status-message">Veuillez demander au client de passer sa carte sur le lecteur.</p>
+                <button id="btn-cancel" class="btn secondary hidden" style="margin-top: 16px;">Annuler la transaction</button>
+                <button id="btn-new-sale" class="btn primary hidden" style="margin-top: 16px;">Nouvelle vente</button>
+            </div>
+        </section>
+
+        <!-- Section 4: Clients -->
+        <section id="section-customers" class="app-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
+                <h2>Annuaire Clients</h2>
+                <button id="btn-add-customer-modal" class="btn primary" style="width:auto; padding: 0 16px;" onclick="document.getElementById('inline-add-customer').classList.remove('hidden')">+ Nouveau Client</button>
+            </div>
+
+            <!-- VOLET INLINE NOUVEAU CLIENT -->
+            <div id="inline-add-customer" class="hidden" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--primary); border-radius: 4px; padding: 16px; margin-bottom: 24px;">
+                <h3 style="margin-bottom: 12px; color: var(--primary);">Création d'un Nouveau Client</h3>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">Les informations seront synchronisées avec votre base Shopify.</p>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label>Prénom</label>
+                        <input type="text" id="new-cust-first" class="custom-input">
+                    </div>
+                    <div class="input-group">
+                        <label>Nom</label>
+                        <input type="text" id="new-cust-last" class="custom-input">
+                    </div>
+                </div>
+                <div class="input-group" style="margin-top:12px;">
+                    <label>Identifiant / Email</label>
+                    <input type="email" id="new-cust-email" class="custom-input">
+                </div>
+                <div class="input-group" style="margin-top:12px;">
+                    <label>Téléphone</label>
+                    <div class="form-grid-phone">
+                        <select id="new-cust-phone-ext" class="custom-input select-ext">
+                            <option value="+1">🇺🇸 +1</option>
+                            <option value="+33" selected>🇫🇷 +33</option>
+                            <option value="+44">🇬🇧 +44</option>
+                            <option value="+39">🇮🇹 +39</option>
+                        </select>
+                        <input type="tel" id="new-cust-phone" class="custom-input" placeholder="06 12 34 56 78">
+                    </div>
+                </div>
+                
+                <!-- Nouveaux champs Adresse -->
+                <div class="input-group" style="margin-top:12px;">
+                    <label>Adresse</label>
+                    <input type="text" id="new-cust-addr" class="custom-input">
+                </div>
+                <div class="form-grid" style="margin-top:12px;">
+                    <div class="input-group">
+                        <label>Ville</label>
+                        <input type="text" id="new-cust-city" class="custom-input">
+                    </div>
+                    <div class="input-group">
+                        <label>Code Postal</label>
+                        <input type="text" id="new-cust-zip" class="custom-input">
+                    </div>
+                </div>
+                <div class="form-grid" style="margin-top:12px;">
+                    <div class="input-group">
+                        <label>État / Province</label>
+                        <input type="text" id="new-cust-state" class="custom-input">
+                    </div>
+                    <div class="input-group">
+                        <label>Pays</label>
+                        <select id="new-cust-country" class="custom-input">
+                            <option value="FR">France</option>
+                            <option value="US">États-Unis</option>
+                            <option value="IT">Italie</option>
+                            <option value="GB">Royaume-Uni</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:12px; margin-top:20px;">
+                    <button id="btn-save-customer" class="btn primary" onclick="window.saveCustomerModal(false)" style="flex:1;">Enregistrer</button>
+                    <button id="btn-save-select-customer" class="btn primary" onclick="window.saveCustomerModal(true)" style="flex:1;">Enregistrer & Caisse</button>
+                    <button id="btn-close-new-customer" class="btn secondary" onclick="document.getElementById('inline-add-customer').classList.add('hidden')" style="flex:1;">Annuler</button>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-start; margin-bottom: 24px;">
+                <div class="stat-card" style="margin:0; padding:12px; min-width: 200px;">
+                    <div class="stat-label">Clients Opt-in (Marketing)</div>
+                    <div class="stat-value" id="stat-emails-clients-page">--</div>
+                </div>
+            </div>
+            <div class="search-bar-premium" style="margin-bottom: 16px;">
+                <div class="input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-customer" placeholder="Rechercher..." class="premium-input" style="min-width: 0;">
+                </div>
+                <div class="search-actions">
+                    <button id="btn-search-customer" class="btn primary">Rechercher</button>
+                    <button id="btn-reset-customer" class="btn secondary">Réinitialiser</button>
+                </div>
+            </div>
+            <div id="customers-list" class="list-container">
+                <p class="loading-text">Recherchez un client pour commencer...</p>
+            </div>
+        </section>
+
+        <!-- Section: Historique des Ventes (Sales) -->
+        <section id="section-history" class="app-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
+                <h2>Historique des Ventes</h2>
+            </div>
+            <div class="search-bar-premium" style="margin-bottom: 16px;">
+                <div class="input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-history" placeholder="Rechercher..." class="premium-input" style="min-width: 0;">
+                </div>
+                <div class="search-actions">
+                    <button id="btn-search-history" class="btn primary">Rechercher</button>
+                    <button id="btn-reset-history" class="btn secondary">Réinitialiser</button>
+                </div>
+            </div>
+            <div id="orders-list" class="list-container">
+                <p class="loading-text">Chargement des ventes...</p>
+            </div>
+        </section>
+
+        <!-- Section 5: Collection (Dashboard PLM) -->
+        <section id="section-inventory" class="app-section">
+            <div class="dashboard-header" style="align-items: flex-start; padding-top: 2vh; padding-bottom: 2vh; justify-content: center; overflow-y: auto;">
+                <div class="header-main" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:24px; margin-bottom: 8px;">
+                    <div>
+                        <h2>Collection</h2>
+                        <div class="model-stats">
+                            <span class="stat-badge" style="white-space: nowrap;"><strong id="validated-models-count">0</strong> modèles actifs validés</span>
+                        </div>
+                    </div>
+                    <button id="btn-create-model-plm" class="btn primary" style="width:auto; white-space:nowrap; font-size:0.9rem; padding: 8px 12px;">＋ Nouveau Modèle</button>
+                </div>
+                
+                <div class="search-bar-premium">
+                    <div class="input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="search-collection" placeholder="Rechercher..." class="premium-input" style="min-width: 0;">
+                    </div>
+                    <div class="search-actions">
+                        <button id="btn-search-collection" class="btn primary">Rechercher</button>
+                        <button id="btn-reset-collection" class="btn secondary">Réinitialiser</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="collection-dashboard" class="collection-grid">
+                <!-- Les modèles seront affichés ici sous forme de CTAs -->
+                <p class="loading-text">Chargement de la collection...</p>
+            </div>
+        </section>
+
+        <!-- Section 7: ERP (Suivi de Production) -->
+        <section id="section-erp" class="app-section">
+            <div class="erp-header">
+                <h2>OPS</h2>
+                <div class="erp-tabs">
+                    <button class="erp-tab active" data-erp="dash">Dashboard</button>
+                    <button class="erp-tab" data-erp="mat">Stock Matières</button>
+                    <button class="erp-tab" data-erp="prod">Production</button>
+                    <button class="erp-tab" data-erp="log">Stock Pièces</button>
+                </div>
+            </div>
+
+            <!-- Sous-Section: Dashboard ERP -->
+            <div id="erp-dash" class="erp-content active">
+                <div class="stats-grid">
+                    <div class="stat-card alert" id="erp-stat-mat-alert" style="cursor:pointer;" title="Voir la liste de rachat">
+                        <span class="stat-label">Alertes Matières (Qté 0)</span>
+                        <span class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card alert" id="erp-stat-pieces-alert" style="cursor:pointer;" title="Voir relances prod">
+                        <span class="stat-label">Alertes Pièces (Qté 0)</span>
+                        <span class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card" id="erp-stat-prod-count">
+                        <span class="stat-label">Prods en cours</span>
+                        <span class="stat-value">0</span>
+                    </div>
+                </div>
+                <div class="list-container" style="margin-top:20px;">
+                    <h3>Dernières alertes stock</h3>
+                    <div id="erp-dashboard-alerts">
+                        <!-- Alertes générées par JS -->
+                    </div>
+                </div>
+            </div>
+
+
+
+            <!-- Sous-Section: Matières -->
+            <div id="erp-materials" class="erp-content hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3>Gestion des Matières</h3>
+                    <button class="btn primary" onclick="openReceiveMaterialsModal()">+ Nouvelle Réception</button>
+                </div>
+                <div class="search-bar-premium" style="margin-bottom: 16px;">
+                    <div class="input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="search-materials" placeholder="Rechercher matière..." class="premium-input">
+                    </div>
+                    <div class="search-actions">
+                        <button id="btn-search-materials" class="btn primary">Rechercher</button>
+                        <button id="btn-reset-materials" class="btn secondary">Réinitialiser</button>
+                    </div>
+                </div>
+
+                <div class="form-grid" style="margin-bottom: 16px;">
+                    <div class="input-group">
+                        <label>Catégorie</label>
+                        <select id="filter-mat-cat" class="custom-input">
+                            <option value="">Toutes</option>
+                            <option value="Peaux">Peaux</option>
+                            <option value="Bijoux">Bijoux</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Animal</label>
+                        <select id="filter-mat-animal" class="custom-input"><option value="">Tous</option></select>
+                    </div>
+                    <div class="input-group">
+                        <label>Type de Peau</label>
+                        <select id="filter-mat-type" class="custom-input"><option value="">Tous</option></select>
+                    </div>
+                    <div class="input-group">
+                        <label>Type de Bijoux</label>
+                        <select id="filter-mat-jewelry" class="custom-input"><option value="">Tous</option></select>
+                    </div>
+                    <div class="input-group">
+                        <label>Couleur</label>
+                        <select id="filter-mat-color" class="custom-input"><option value="">Toutes</option></select>
+                    </div>
+                </div>
+                <button class="btn primary" onclick="renderERPMaterials()" style="margin-bottom: 24px; width:100%;">Appliquer les Filtres</button>
+                <div id="erp-materials-list" class="list-container">
+                    <p class="loading-text">Chargement des matières...</p>
+                </div>
+                
+                <h3 style="margin-top: 32px;">Nouvelle Sortie Exceptionnelle</h3>
+                <div class="form-grid" style="margin-bottom: 16px; align-items: end; gap: 16px;">
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label>Matière</label>
+                        <select id="erp-sortie-mat-select" class="custom-input"></select>
+                    </div>
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label>Quantité</label>
+                        <input type="number" id="erp-sortie-mat-qty" class="custom-input" min="0.1" step="0.1" placeholder="Ex: 1">
+                    </div>
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label>Utilisateur</label>
+                        <input type="text" id="erp-sortie-mat-user" class="custom-input" placeholder="Nom...">
+                    </div>
+                    <button class="btn primary" style="height: 48px;" onclick="window.submitSortieExceptionnelle('mat')">Valider Sortie</button>
+                </div>
+                
+                <h3 style="margin-top: 32px;">Historique des Sorties Exceptionnelles</h3>
+                <div id="erp-movements-history" class="list-container" style="max-height: 300px; overflow-y: auto;">
+                    <p class="loading-text">Chargement de l'historique...</p>
+                </div>
+            </div>
+
+            <!-- Sous-Section: Production -->
+            <div id="erp-prod" class="erp-content">
+                <h3>Suivi des Ordres de Production</h3>
+                <div id="erp-production-list" class="list-container">
+                    <!-- Liste générée -->
+                </div>
+            </div>
+
+            <!-- Sous-Section: Stock Pièces -->
+            <div id="erp-log" class="erp-content">
+                <h3>Stock Pièces (Entrepôt)</h3>
+                <div id="erp-pieces-list" class="list-container">
+                    <!-- Liste générée -->
+                </div>
+                
+                <h3 style="margin-top: 32px;">Nouvelle Sortie Exceptionnelle</h3>
+                <div class="form-grid" style="margin-bottom: 16px; align-items: end; gap: 16px;">
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label>Pièce / Déclinaison</label>
+                        <select id="erp-sortie-pieces-select" class="custom-input"></select>
+                    </div>
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label>Quantité</label>
+                        <input type="number" id="erp-sortie-pieces-qty" class="custom-input" min="1" step="1" placeholder="Ex: 1">
+                    </div>
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label>Utilisateur</label>
+                        <input type="text" id="erp-sortie-pieces-user" class="custom-input" placeholder="Nom...">
+                    </div>
+                    <button class="btn primary" style="height: 48px;" onclick="window.submitSortieExceptionnelle('pieces')">Valider Sortie</button>
+                </div>
+                
+                <h3 style="margin-top: 32px;">Historique des Sorties Exceptionnelles</h3>
+                <div id="erp-pieces-movements-history" class="list-container" style="max-height: 300px; overflow-y: auto;">
+                    <p class="loading-text">Chargement de l'historique...</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Section 8: Admin (BDD & Utilisateurs) -->
+        <section id="section-admin" class="app-section">
+            <div class="erp-header">
+                <h2>ADMINISTRATION</h2>
+                <div class="erp-tabs">
+                    <button class="admin-tab active" data-admin="config">Base de Données (BDD)</button>
+                    <button class="admin-tab" data-admin="users">Utilisateurs</button>
+                </div>
+            </div>
+
+            <!-- Sous-Section: Configuration BDD -->
+            <div id="admin-config" class="admin-content active">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3>Configuration du Système (BDD)</h3>
+                </div>
+                <div class="config-selector" style="margin-bottom: 20px;">
+                    <select id="config-category-select" class="premium-input">
+                        <option value="animalTypes">Animal</option>
+                        <option value="years">Années</option>
+                        <option value="ateliers">Ateliers</option>
+                        <option value="jewelry">Bijouterie</option>
+                        <option value="hsCodes">Codes HS</option>
+                        <option value="colors">Couleurs</option>
+                        <option value="materialDetails">Détails Matières</option>
+                        <option value="linings">Doublures</option>
+                        <option value="suppliers">Fournisseurs</option>
+                        <option value="materials">Matières (Taurillon, Veau...)</option>
+                        <option value="globalMaterials">Matières Globales</option>
+                        <option value="models">Modèles</option>
+                        <option value="options">Options (Quantité)</option>
+                        <option value="origins">Pays d'Origine</option>
+                        <option value="seasons">Saisons</option>
+                        <option value="sizes">Tailles</option>
+                        <option value="optionTypes">Types d'Options</option>
+                    </select>
+                </div>
+                
+                <div id="config-table-container" class="list-container" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Tableau généré dynamiquement -->
+                </div>
+                
+                <div style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 24px;">
+                    <h4 style="margin-bottom: 8px;">Frais de Port Globaux (Expédié)</h4>
+                    <div class="form-grid" style="align-items: end;">
+                        <div class="input-group">
+                            <input type="number" id="admin-shipping-cost" class="custom-input" placeholder="Prix en $ (ex: 100)">
+                        </div>
+                        <button class="btn primary small-btn" onclick="window.saveShippingCost()">Enregistrer Frais de Port</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+                    <h4 style="margin-bottom: 8px;">Ajouter un nouvel élément</h4>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <input type="text" id="config-new-name" class="custom-input" placeholder="Nom de l'élément">
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="config-new-id" class="custom-input" placeholder="ID manuel court (ex: AA001, 25, H...)">
+                        </div>
+                    </div>
+                    <button id="btn-add-config-item" class="btn secondary" style="margin-top: 8px;">Ajouter à la catégorie</button>
+                </div>
+                
+                <div style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 24px;">
+                    <h4 style="margin-bottom: 8px;">Mise à jour groupée des prix (Import CSV)</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Importez le fichier "app_base_v3.csv" pour mettre à jour tous les prix et modèles d'un coup.</p>
+                    <input type="file" id="admin-csv-upload" accept=".csv" class="custom-input" style="padding: 8px; margin-bottom: 8px;">
+                    <button class="btn primary small-btn" onclick="window.uploadProductCSV()">Importer & Mettre à jour</button>
+                    <p id="csv-upload-status" style="font-size: 0.85rem; margin-top: 8px; font-weight: bold;"></p>
+                </div>
+            </div>
+
+            <!-- Sous-Section: Utilisateurs -->
+            <div id="admin-users" class="admin-content hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3>Gestion des Utilisateurs</h3>
+                </div>
+                <div id="admin-users-list" class="list-container">
+                    <p class="loading-text">Chargement des utilisateurs...</p>
+                </div>
+                
+                <div style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+                    <h4 style="margin-bottom: 8px;">Ajouter un utilisateur</h4>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <input type="text" id="new-user-firstname" class="custom-input" placeholder="Prénom">
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="new-user-lastname" class="custom-input" placeholder="Nom">
+                        </div>
+                        <div class="input-group">
+                            <input type="email" id="new-user-email" class="custom-input" placeholder="Email">
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <input type="text" id="new-user-password" class="custom-input" placeholder="Mot de passe / PIN">
+                        </div>
+                        <div class="input-group">
+                            <input type="number" id="new-user-commission" class="custom-input" placeholder="Commission (%)" min="0" max="100">
+                        </div>
+                    <div class="form-grid" style="margin-top: 8px;">
+                        <div class="input-group" style="grid-column: 1/-1;">
+                            <label>Permissions / Accès</label>
+                            <div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:8px;">
+                                <label style="color:var(--text-main);"><input type="checkbox" id="perm-caisse" value="caisse" checked> Caisse</label>
+                                <label style="color:var(--text-main);"><input type="checkbox" id="perm-collection" value="collection" checked> Collection</label>
+                                <label style="color:var(--text-main);"><input type="checkbox" id="perm-stock" value="stock" checked> Stock</label>
+                                <label style="color:var(--text-main);"><input type="checkbox" id="perm-ventes" value="ventes" checked> Ventes</label>
+                                <label style="color:var(--text-main);"><input type="checkbox" id="perm-admin" value="admin"> Admin</label>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-add-user" class="btn secondary" onclick="window.createUser()" style="margin-top: 8px;">Ajouter Utilisateur</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Modale ERP: Ajout/Modif Matière -->
+        <div id="modal-erp-material" class="modal hidden">
+            <div class="modal-content" style="position:relative;">
+                <button class="close-modal-btn" onclick="document.getElementById('modal-erp-material').classList.add('hidden')" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer; z-index: 10;">×</button>
+                <h3 id="mat-modal-title" style="margin-bottom:16px; padding-right: 20px;">Nouvelle Matière</h3>
+                <input type="hidden" id="mat-id">
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Matière (ex: Taurillon)</label>
+                        <input type="text" id="mat-category" class="custom-input" placeholder="Taurillon">
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Type (ex: Lagun)</label>
+                        <input type="text" id="mat-leather-type" class="custom-input" placeholder="Lagun">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Détail (ex: Epais)</label>
+                        <input type="text" id="mat-detail" class="custom-input">
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Couleur</label>
+                        <input type="text" id="mat-color" class="custom-input">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Pieds (Quantité)</label>
+                        <input type="number" id="mat-feet" class="custom-input" step="0.01">
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Rouleaux</label>
+                        <input type="number" id="mat-rolls" class="custom-input">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Emplacement (ex: E1-R3)</label>
+                        <input type="text" id="mat-location" class="custom-input">
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Stock Min (Alerte)</label>
+                        <input type="number" id="mat-min" class="custom-input">
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; margin-top:20px;">
+                    <button class="btn secondary" id="btn-save-mat">Enregistrer</button>
+                    <button class="btn" id="btn-close-mat-modal">Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modale ERP: Mouvement Exceptionnel de Stock -->
+        <div id="modal-direct-edit" class="modal hidden">
+            <div class="modal-content" style="max-width: 400px; position:relative;">
+                <button class="close-modal-btn" onclick="document.getElementById('modal-direct-edit').classList.add('hidden')" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer;">×</button>
+                <h3>Modification Manuelle</h3>
+                <p id="direct-edit-title" style="font-size:0.9rem; color:var(--text-muted); margin-bottom:16px;"></p>
+                
+                <input type="hidden" id="direct-edit-id">
+                <input type="hidden" id="direct-edit-group">
+                <input type="hidden" id="direct-edit-color">
+                
+                <div class="input-group">
+                    <label>Quantité (Rouleaux ou Unités)</label>
+                    <input type="number" id="direct-edit-qty" class="custom-input" min="0" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Pieds (Optionnel)</label>
+                    <input type="number" id="direct-edit-feet" class="custom-input" min="0" step="0.01">
+                </div>
+                
+                <button class="btn primary" onclick="submitDirectEdit()" style="width:100%; margin-top:20px;">Enregistrer les modifications</button>
+            </div>
+        </div>
+
+        <!-- Modale ERP: Nouvelle Réception -->
+        <div id="modal-erp-receipt" class="modal hidden">
+            <div class="modal-content" style="max-width: 800px; position:relative;">
+                <button class="close-modal-btn" onclick="document.getElementById('modal-erp-receipt').classList.add('hidden')" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer; z-index: 10;">×</button>
+                <h3 style="margin-bottom:16px; padding-right: 20px;">Nouvelle Réception (Génération de BR)</h3>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Fournisseur</label>
+                        <select id="receipt-supplier" class="custom-input">
+                            <option value="Tannerie Haas">Tannerie Haas</option>
+                            <option value="Tannerie Degermann">Tannerie Degermann</option>
+                            <option value="Bodin Joyeux">Bodin Joyeux</option>
+                            <option value="Atelier de Bijouterie">Atelier de Bijouterie</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.8rem; color:var(--text-muted);">Date de réception</label>
+                        <input type="date" id="receipt-date" class="custom-input">
+                    </div>
+                </div>
+                
+                <h4 style="margin-top: 20px; margin-bottom: 10px;">Articles reçus (Rouleaux)</h4>
+                <div id="receipt-items-container">
+                    <!-- Les lignes d'articles seront ajoutées ici en JS -->
+                </div>
+                
+                <button class="btn secondary small-btn" id="btn-add-receipt-item" onclick="addReceiptItem()" style="margin-top: 10px;">➕ Ajouter une ligne</button>
+
+                <div style="display:flex; gap:12px; margin-top:30px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+                    <button class="btn primary" id="btn-save-receipt" onclick="finalizeReceipt()">Valider et Créer le Stock</button>
+                    <button class="btn" id="btn-close-receipt-modal" onclick="document.getElementById('modal-erp-receipt').classList.add('hidden')">Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modale: Fiche Technique (PLM) -->
+        <div id="modal-product-sheet" class="modal hidden">
+            <div class="modal-content premium-modal">
+                <div class="modal-header-premium">
+                    <div class="header-info">
+                        <h2 id="sheet-title">Fiche Technique</h2>
+                        <div class="sku-display">SKU: <span id="generated-sku">Génération...</span></div>
+                    </div>
+                    <button class="close-modal-btn" onclick="closeProductSheet()">✕</button>
+                </div>
+
+                <form id="fiche-technique-form" class="plm-form">
+                    <!-- 1. Identification -->
+                    <div class="form-section">
+                        <h3>1. Identification du Modèle</h3>
+                        <div class="form-grid" id="model-select-group">
+                            <div class="input-group">
+                                <label>Nom du Modèle</label>
+                                <select id="plm-model-name" class="premium-input"></select>
+                            </div>
+                            <div class="input-group">
+                                <label>Matière Globale</label>
+                                <select id="plm-material-global" class="premium-input" required></select>
+                            </div>
+                        </div>
+                        <div class="form-grid hidden" id="model-new-group">
+                            <div class="input-group">
+                                <label>Nouveau Nom du Modèle</label>
+                                <input type="text" id="plm-new-model-name" class="premium-input" placeholder="ex: Colette">
+                            </div>
+                            <div class="input-group">
+                                <label>Code Modèle (ID)</label>
+                                <input type="text" id="plm-new-model-id" class="premium-input" placeholder="ex: CO001">
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="input-group">
+                                <label>Coloris</label>
+                                <select id="plm-color" class="premium-input" required></select>
+                            </div>
+                            <div class="input-group">
+                                <label>Taille</label>
+                                <select id="plm-size" class="premium-input" required></select>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="input-group">
+                                <label>Année</label>
+                                <select id="plm-year" class="premium-input" required>
+                                    <option value="25">2025</option>
+                                    <option value="26">2026</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Saison</label>
+                                <select id="plm-season" class="premium-input" required>
+                                    <option value="H">Hiver (H)</option>
+                                    <option value="F">Été (F)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Options Fonctionnelles -->
+                    <div class="form-section">
+                        <h3>2. Options Fonctionnelles</h3>
+                        <div id="options-container">
+                            <div class="form-grid">
+                                <div class="input-group">
+                                    <label>Option 1</label>
+                                    <select id="plm-option-1" class="premium-input plm-option-field">
+                                        <option value="0">Aucune</option>
+                                        <option value="1">Avec Pochon</option>
+                                        <option value="2">Sans Pochon</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Option 2</label>
+                                    <select id="plm-option-2" class="premium-input plm-option-field">
+                                        <option value="0">Aucune</option>
+                                        <option value="1">Avec Chaîne</option>
+                                        <option value="2">Sans Chaîne</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn secondary small-btn" id="btn-add-option">+ Ajouter une option</button>
+                    </div>
+
+                    <!-- 3. Fabrication -->
+                    <div class="form-section">
+                        <h3>3. Fabrication</h3>
+                        <div class="form-grid">
+                            <div class="input-group">
+                                <label>Atelier Principal</label>
+                                <select id="plm-atelier" class="premium-input" required></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Matières -->
+                    <div class="form-section">
+                        <h3>4. Matières</h3>
+                        
+                        <!-- Matière Principale -->
+                        <div class="material-block">
+                            <h4>Matière Principale</h4>
+                            <div class="form-grid">
+                                <div class="input-group">
+                                    <label>Animal</label>
+                                    <select id="plm-mat1-animal" class="premium-input" required></select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Type de peau</label>
+                                    <select id="plm-mat1-type" class="premium-input" required></select>
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="input-group">
+                                    <label>Coloris</label>
+                                    <select id="plm-mat1-color" class="premium-input" required></select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Quantité (Rouleaux)</label>
+                                    <input type="number" id="plm-mat1-qty" class="premium-input" required>
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="input-group">
+                                    <label>Fournisseur</label>
+                                    <select id="plm-mat1-supplier" class="premium-input" required></select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Détails (Épaisseur...)</label>
+                                    <select id="plm-mat1-details" class="premium-input"></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Matière Secondaire -->
+                        <div class="boolean-toggle">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="plm-has-mat2"> Ajouter une matière secondaire
+                            </label>
+                        </div>
+                        <div id="mat2-fields" class="material-block dynamic-section hidden">
+                            <h4>Matière Secondaire</h4>
+                            <div class="form-grid">
+                                <div class="input-group"><label>Animal</label><select id="plm-mat2-animal" class="premium-input mat2-req"></select></div>
+                                <div class="input-group"><label>Type de peau</label><select id="plm-mat2-type" class="premium-input mat2-req"></select></div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="input-group"><label>Coloris</label><select id="plm-mat2-color" class="premium-input mat2-req"></select></div>
+                                <div class="input-group"><label>Quantité</label><input type="number" id="plm-mat2-qty" class="premium-input mat2-req"></div>
+                            </div>
+                            <div class="input-group"><label>Fournisseur</label><select id="plm-mat2-supplier" class="premium-input mat2-req"></select></div>
+                        </div>
+
+                        <!-- Matière Tertiaire -->
+                        <div class="boolean-toggle">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="plm-has-mat3"> Ajouter une matière tertiaire
+                            </label>
+                        </div>
+                        <div id="mat3-fields" class="material-block dynamic-section hidden">
+                            <h4>Matière Tertiaire</h4>
+                            <div class="form-grid">
+                                <div class="input-group"><label>Animal</label><select id="plm-mat3-animal" class="premium-input mat3-req"></select></div>
+                                <div class="input-group"><label>Type de peau</label><select id="plm-mat3-type" class="premium-input mat3-req"></select></div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="input-group"><label>Coloris</label><select id="plm-mat3-color" class="premium-input mat3-req"></select></div>
+                                <div class="input-group"><label>Quantité</label><input type="number" id="plm-mat3-qty" class="premium-input mat3-req"></div>
+                            </div>
+                            <div class="input-group"><label>Fournisseur</label><select id="plm-mat3-supplier" class="premium-input mat3-req"></select></div>
+                        </div>
+
+                        <!-- Doublure -->
+                        <div class="boolean-toggle">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="plm-has-lining"> Ajouter une doublure
+                            </label>
+                        </div>
+                        <div id="lining-fields" class="material-block dynamic-section hidden">
+                            <h4>Doublure</h4>
+                            <div class="form-grid">
+                                <div class="input-group"><label>Animal</label><select id="plm-lining-animal" class="premium-input lining-req"></select></div>
+                                <div class="input-group"><label>Type</label><select id="plm-lining-type" class="premium-input lining-req"></select></div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="input-group"><label>Coloris</label><select id="plm-lining-color" class="premium-input lining-req"></select></div>
+                                <div class="input-group"><label>Quantité</label><input type="number" id="plm-lining-qty" class="premium-input lining-req"></div>
+                            </div>
+                            <div class="input-group"><label>Fournisseur</label><select id="plm-lining-supplier" class="premium-input lining-req"></select></div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Bijouterie -->
+                    <div class="form-section">
+                        <h3>5. Bijouterie</h3>
+                        
+                        <!-- Bijouterie 1 -->
+                        <div class="boolean-toggle">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="plm-has-bij1"> Bijouterie 1
+                            </label>
+                        </div>
+                        <div id="bij1-fields" class="material-block dynamic-section hidden">
+                            <div class="input-group">
+                                <label>Détails / Composant</label>
+                                <select id="plm-bij1-details" class="premium-input bij1-req"></select>
+                            </div>
+                            <div class="form-grid">
+                                <div class="input-group"><label>Quantité</label><input type="number" id="plm-bij1-qty" class="premium-input bij1-req"></div>
+                                <div class="input-group"><label>Fournisseur</label><select id="plm-bij1-supplier" class="premium-input bij1-req"></select></div>
+                            </div>
+                        </div>
+
+                        <!-- Repeter pour Bijouterie 2, 3, 4 si besoin (ou dynamiquement) -->
+                        <div id="extra-bijouteries"></div>
+                    </div>
+
+                    <!-- 6. Financier -->
+                    <div class="form-section">
+                    <div class="form-section">
+                        <h3>6. Prix & Coûts</h3>
+                        <div class="form-grid">
+                            <div class="input-group"><label>Price HT (USD)</label><input type="number" id="plm-price-usd-ht" class="premium-input" step="0.01"></div>
+                            <div class="input-group"><label>Duties & Shipping</label><input type="number" id="plm-duties-shipping-usd" class="premium-input" step="0.01"></div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="input-group" style="grid-column: 1 / -1;"><label>Final Price (DDP)</label><input type="number" id="plm-final-price-ddp" class="premium-input" step="0.01"></div>
+                        </div>
+                    </div>
+
+                    <!-- 7. Logistique & Douanes -->
+                    <div class="form-section">
+                        <h3>7. Logistique & Douanes</h3>
+                        <div class="form-grid">
+                            <div class="input-group">
+                                <label>Code HS (ex: 4202.21)</label>
+                                <select id="plm-hs-code" class="premium-input"></select>
+                            </div>
+                            <div class="input-group">
+                                <label>Pays d'Origine</label>
+                                <select id="plm-country-origin" class="premium-input"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 8. Statut -->
+                    <div class="form-section">
+                        <h3>8. Statut de la Fiche</h3>
+                        <div class="input-group">
+                            <select id="plm-status" class="premium-input">
+                                <option value="Brouillon">Brouillon</option>
+                                <option value="Validé">Validé</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn primary large" id="btn-save-plm">Sauvegarder la Fiche Technique</button>
+                        <button type="button" class="btn accent" id="btn-sync-shopify">Sync Shopify</button>
+                        <button type="button" class="btn danger" id="btn-delete-plm">Supprimer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+
+        <!-- Pop-in Article Hors Catalogue -->
+        <div id="modal-custom-product" class="modal-overlay hidden" style="z-index: 9999 !important;">
+            <div class="modal-content" style="max-width: 500px; position:relative;">
+                <button class="close-modal-btn" onclick="document.getElementById('modal-custom-product').classList.add('hidden')" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer; z-index: 10;">×</button>
+                <h3 style="padding-right: 20px;">Création Pièce hors catalogue</h3>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">Ces informations seront synchronisées avec Shopify.</p>
+                <div class="form-grid" style="margin-top:16px;">
+                    <div class="input-group" style="grid-column: 1 / -1;">
+                        <label>Titre de l'article (Shopify)</label>
+                        <input type="text" id="custom-item-name" class="custom-input" placeholder="ex: Commande spéciale Olympe">
+                    </div>
+                    <div class="input-group">
+                        <label>Prix HT ($)</label>
+                        <input type="number" id="custom-item-price" class="custom-input" placeholder="0.00" oninput="document.getElementById('custom-tax-preview').innerText = 'Sales Tax estimées (+8.875%) : $' + (this.value * 0.08875).toFixed(2) + ' | Total TTC : $' + (this.value * 1.08875).toFixed(2)">
+                        <p id="custom-tax-preview" style="font-size: 0.85rem; color: var(--primary-color); margin-top: 6px; font-weight: 500;">Sales Tax estimées (+8.875%) : $0.00 | Total TTC : $0.00</p>
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; margin-top:20px;">
+                    <button class="btn primary" onclick="addCustomItemToCart()" style="flex:2;">Valider et Ajouter au Panier</button>
+                    <button class="btn secondary" onclick="document.getElementById('modal-custom-product').classList.add('hidden')" style="flex:1;">Annuler</button>
+                </div>
+            </div>
+        </div>
+
+
+
+    </main>
+
+    <!-- Navigation Bar (Bottom) -->
+    <nav class="bottom-nav hidden" id="bottom-nav">
+        <button class="nav-btn" data-target="section-payment">
+            <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-cart-icon lucide-shopping-cart"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></span>
+            <span class="label" style="text-transform: uppercase;">Caisse</span>
+        </button>
+        <button class="nav-btn" data-target="section-inventory">
+            <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-handbag-icon lucide-handbag"><path d="M2.048 18.566A2 2 0 0 0 4 21h16a2 2 0 0 0 1.952-2.434l-2-9A2 2 0 0 0 18 8H6a2 2 0 0 0-1.952 1.566z"/><path d="M8 11V6a4 4 0 0 1 8 0v5"/></svg></span>
+            <span class="label" style="text-transform: uppercase;">Collection</span>
+        </button>
+        <button class="nav-btn" data-target="section-customers">
+            <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-user-icon lucide-file-user"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M16 22a4 4 0 0 0-8 0"/><circle cx="12" cy="15" r="3"/></svg></span>
+            <span class="label" style="text-transform: uppercase;">Clients</span>
+        </button>
+        <button class="nav-btn" data-target="section-history">
+            <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-dollar-sign-icon lucide-dollar-sign"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+            <span class="label" style="text-transform: uppercase;">Ventes</span>
+        </button>
+        <button class="nav-btn erp-btn" data-target="section-erp">
+            <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-container-icon lucide-container"><path d="M22 7.7c0-.6-.4-1.2-.8-1.5l-6.3-3.9a1.72 1.72 0 0 0-1.7 0l-10.3 6c-.5.2-.9.8-.9 1.4v6.6c0 .5.4 1.2.8 1.5l6.3 3.9a1.72 1.72 0 0 0 1.7 0l10.3-6c.5-.3.9-1 .9-1.5Z"/><path d="M10 21.9V14L2.1 9.1"/><path d="m10 14 11.9-6.9"/><path d="M14 19.8v-8.1"/><path d="M18 17.5V9.4"/></svg></span>
+            <span class="label" id="nav-label-erp">OPS</span>
+        </button>
+        <button class="nav-btn admin-btn" data-target="section-admin">
+            <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-icon lucide-shield"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg></span>
+            <span class="label" id="nav-label-admin">ADMIN</span>
+        </button>
+    </nav>
+
+    <script src="stripe-tpe.js?v=31"></script>
+    <script src="auth.js?v=31"></script>
+    <script src="app.js?v=31"></script>
+</body>
+</html>
