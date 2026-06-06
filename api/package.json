@@ -17,6 +17,7 @@
     "@types/node": "^22.10.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "stripe": "^22.2.0",
     "typescript": "^6.0.3"
   },
   "devDependencies": {

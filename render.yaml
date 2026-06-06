@@ -23,3 +23,7 @@ services:
         sync: false
       - key: RECOVERY_KEY
         sync: false
+      - key: STRIPE_API_KEY_FR
+        sync: false
+      - key: STRIPE_API_KEY_US
+        sync: false

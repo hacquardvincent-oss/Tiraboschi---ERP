@@ -211,6 +211,41 @@ interface RecentOrdersResult {
   };
 }
 
+interface OrdersWithRefsResult {
+  orders: {
+    nodes: {
+      name: string;
+      createdAt: string;
+      note: string | null;
+      customAttributes: { key: string; value: string | null }[];
+      totalPriceSet: { presentmentMoney: { amount: string; currencyCode: string } };
+    }[];
+  };
+}
+
+/**
+ * Commandes Shopify depuis une date, avec leurs références (note + customAttributes)
+ * et leur total présentement — pour la réconciliation Stripe ↔ Shopify.
+ */
+export async function getOrdersWithRefs(sinceISODate: string, first = 100): Promise<OrdersWithRefsResult> {
+  const query = `
+    query OrdersWithRefs($q: String!, $first: Int!) {
+      orders(first: $first, query: $q, sortKey: CREATED_AT, reverse: true) {
+        nodes {
+          name
+          createdAt
+          note
+          customAttributes { key value }
+          totalPriceSet { presentmentMoney { amount currencyCode } }
+        }
+      }
+    }`;
+  return shopifyGraphQL<OrdersWithRefsResult>(query, {
+    q: `created_at:>=${sinceISODate}`,
+    first,
+  });
+}
+
 /** Liste les commandes Shopify depuis une date (réconciliation). */
 export async function listRecentOrders(sinceISODate: string, first = 50): Promise<RecentOrdersResult> {
   const query = `

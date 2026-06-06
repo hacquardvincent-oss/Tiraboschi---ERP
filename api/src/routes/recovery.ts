@@ -1,20 +1,8 @@
-import { Router, type RequestHandler } from 'express';
+import { Router } from 'express';
 import { createRecoveryOrder, listRecentOrders } from '../services/shopify';
+import { requireRecoveryKey } from '../middleware/recoveryKey';
 
 export const recoveryRouter = Router();
-
-/**
- * Garde simple par clé partagée (en attendant l'auth JWT complète de la V2).
- * La clé est dans la variable d'environnement RECOVERY_KEY (jamais dans le repo).
- */
-const requireRecoveryKey: RequestHandler = (req, res, next) => {
-  const provided = req.header('x-recovery-key');
-  if (!process.env.RECOVERY_KEY || provided !== process.env.RECOVERY_KEY) {
-    res.status(401).json({ status: 'error', message: 'Clé de récupération invalide ou absente.' });
-    return;
-  }
-  next();
-};
 
 recoveryRouter.use(requireRecoveryKey);
 
