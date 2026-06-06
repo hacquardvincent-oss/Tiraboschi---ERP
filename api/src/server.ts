@@ -77,6 +77,13 @@ app.get(/^(?!\/api\/).*/, (_req, res) => {
   res.sendFile(path.join(WEB_DIST, 'index.html'));
 });
 
+// Gestionnaire d'erreurs global : log + JSON (jamais de 500 « brut » silencieux).
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[error]', err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: err.message });
+});
+
 /**
  * Au boot : applique les migrations Prisma (idempotent) puis seed l'admin.
  * Résilient : en cas d'échec, on log et on continue (les autres routes restent up).

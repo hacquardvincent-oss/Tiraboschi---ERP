@@ -29,6 +29,7 @@ authRouter.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
+    console.error('[login] erreur :', err);
     res.status(503).json({ error: 'Base indisponible : ' + (err as Error).message });
   }
 });
