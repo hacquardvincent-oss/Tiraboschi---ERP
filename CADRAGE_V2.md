@@ -225,6 +225,12 @@ auth bcrypt + JWT · i18n FR/EN.
 Store `tiraboschi-paris.myshopify.com` · Auth via `client_credentials` (à reconfirmer/sécuriser) ·
 Commandes/clients/inventaire/Draft Orders (taxes US) · **manque pagination cursor** (`limit=250`).
 **V2 actée** : montée de version récente + **GraphQL** + pagination cursor, encapsulé dans un service de sync.
+**Auth V2** : app personnalisée Shopify dédiée avec **token offline `write_orders`** (remplace le `client_credentials` V1, fragile).
+**Fiabilité de la sync (exigence, suite à incident prod du 04/06/2026)** : la création de commande à la vente
+ne doit **jamais** échouer en silence. → **outbox persistante + retries automatiques + statut de sync visible
+par vente** (« non synchronisée » au lieu d'un `console.error` avalé) + **écran/outil de réconciliation**
+Stripe ↔ Shopify. Incident V1 : token Shopify HS depuis ~le 28/05 → toutes les ventes encaissées non
+poussées dans Shopify, sans alerte.
 
 ### Google Drive — import inventaire
 Inventaire matières + pièces stocké sur Drive → import one-shot + resync en V2 (intégration MCP disponible).
