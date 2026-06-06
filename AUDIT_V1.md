@@ -83,6 +83,12 @@ part sur Postgres en V2, cf. cadrage).
 - Auth via `grant_type=client_credentials` sur `/admin/oauth/access_token` (`server.js:124-132`) —
   flow **non documenté** par Shopify pour l'Admin API ; fragile si le renouvellement échoue.
 
+### 🟠 MOYEN-5bis — Bug de conversion de devise EUR/USD au POS (constaté en prod)
+Constaté le 2026-06-06 sur une vente US : un article à **670 $** a été encaissé sur la base de
+**680** (conversion EUR↔USD erronée), ce qui décale aussi la sales tax. → la cliente a été
+surfacturée (~10 $ + taxe). **Leçon V2** : centraliser prix/devise/taxes dans un `priceService`/
+`taxService` typés et **testés** (pas de conversion ad hoc éparpillée comme en V1, cf. EXTRACTS §1).
+
 ### 🟡 MOYEN-6 — Specs ≠ code, et angles morts métier
 - Les `SPECIFICATIONS_FONCTIONNELLES.md` décrivent TVA 20% / Sales Tax 8% / duties 9% / port 30€-100$.
   **Le code a divergé** : taxes US via Draft Orders, duties « incluses » (0 calculé), port = config
