@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
+import fs from 'node:fs';
 import express from 'express';
 import cors from 'cors';
 import { config } from './config';
@@ -40,6 +41,26 @@ app.use(express.json());
 
 // Fichiers statiques du frontend (assets, manifest, sw…)
 app.use(express.static(WEB_DIST));
+
+// Diagnostic public : où en est le frontend servi (chemins + fichiers présents).
+app.get('/api/diag', (_req, res) => {
+  const readDir = (p: string): string[] => {
+    try {
+      return fs.readdirSync(p);
+    } catch {
+      return [];
+    }
+  };
+  res.json({
+    webDist: WEB_DIST,
+    cwd: process.cwd(),
+    dirname: __dirname,
+    webDistExists: fs.existsSync(WEB_DIST),
+    indexHtmlExists: fs.existsSync(path.join(WEB_DIST, 'index.html')),
+    files: readDir(WEB_DIST),
+    assets: readDir(path.join(WEB_DIST, 'assets')),
+  });
+});
 
 app.use('/api', healthRouter);
 app.use('/api/recovery', recoveryRouter);
@@ -118,6 +139,7 @@ async function bootstrap(): Promise<void> {
   await initDatabase();
   app.listen(config.port, () => {
     console.log(`API V2 à l'écoute sur le port ${config.port} (env: ${config.nodeEnv})`);
+    console.log(`[web] WEB_DIST=${WEB_DIST} existe=${fs.existsSync(WEB_DIST)} index=${fs.existsSync(path.join(WEB_DIST, 'index.html'))}`);
     startWatchdog();
   });
 }
