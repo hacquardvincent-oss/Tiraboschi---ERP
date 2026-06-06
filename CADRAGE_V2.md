@@ -55,10 +55,10 @@ Ne pas les retraiter — ils sont réglés en V1 :
 ### Les risques structurels RÉELS (vérifiés) — motivent la refonte
 | # | Risque | Gravité |
 |---|---|---|
-| 🔴 1 | **Persistance sur disque éphémère Render** — `data/*.json` réécrits localement ; redeploy → perte des données depuis le dernier commit | Bloquant |
-| 🔴 2 | **Écritures JSON non atomiques** — `fs.writeFileSync` sans verrou ; 2 ventes simultanées (Trunk Show) → corruption (cause probable des scripts `restore*.js`) | Bloquant |
-| 🔴 3 | **MongoDB = code mort** — client instancié au boot mais jamais connecté ; fausse robustesse → **0 coût de migration pour changer de base** | Majeur |
-| 🔴 4 | **Sécurité auth** — mots de passe en clair (code + JSON), PIN, pas de hash/JWT, pas de rate-limit login | Majeur |
+| 🔴 1 | **Sécurité : API entièrement ouverte** — 0 middleware d'auth serveur ; `GET /api/users` expose les mots de passe en clair ; auth 100% cosmétique côté navigateur ; backdoor `admin_secours`/`admin` en dur (cf. `AUDIT_V1.md`) | Bloquant |
+| 🔴 2 | **Persistance sur disque éphémère Render** — `data/*.json` réécrits localement ; redeploy → perte des données depuis le dernier commit | Bloquant |
+| 🔴 3 | **Écritures JSON non atomiques** — `fs.writeFileSync` sans verrou ; 2 ventes simultanées (Trunk Show) → corruption (cause vérifiée des scripts `restore*.js`) | Bloquant |
+| 🔴 4 | **MongoDB = code mort** — `getMongoDB()` défini mais jamais appelé → **0 coût de migration pour changer de base** | Majeur |
 | 🟠 5 | **`prestart` rejoue des migrations à chaque boot** (`replace_db_v3.js` + `import_inventaire.js`) | À auditer |
 | 🟡 6 | **Architecture** — `server.js` 1395 l. + `app.js` 2817 l. monolithiques, non typés, duplication | Dette |
 | 🟡 7 | **Pagination Shopify absente** (`limit=250`) → troncature silencieuse quand la base grossit | Dette |
