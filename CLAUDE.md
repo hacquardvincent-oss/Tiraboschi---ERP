@@ -13,10 +13,12 @@ Antigravity), en reprise de lead. Le code V1 est figé en référence lecture se
 
 ## Documents d'autorité (lire dans cet ordre)
 1. **`CADRAGE_V2.md`** — cadrage vivant : vision, stack, périmètre, roadmap, **décisions actées**.
-2. **`AUDIT_V1.md`** — audit code-vérifié du V1 : ce qui marche, ce qui ne va pas, ce qu'on fait mieux.
-3. `docs/HANDOFF_V2_SCOPING.md` — audit d'une session précédente (référence).
-4. `legacy-v1/` — code V1 figé + `EXTRACTS.md` (logique métier exacte : taxes, SKU, `/pay/:id`, Shopify).
-5. `docs/archive/` — anciens `CLAUDE.md`/`CONTEXT.md` V1 (**périmés**, conservés pour historique seulement).
+2. **`SPEC_FONCTIONNEL_V2.md`** — **cible fonctionnelle détaillée par module** (POS/Collection/CRM/Ventes/Inventaire/Admin) + transverse + roadmap re-séquencée.
+3. **`AUDIT_V1.md`** — audit code-vérifié du V1 : ce qui marche, ce qui ne va pas, ce qu'on fait mieux.
+4. `docs/HANDOFF_V2_SCOPING.md` — audit d'une session précédente (référence).
+5. `legacy-v1/` — code V1 figé + `EXTRACTS.md` (logique métier exacte : taxes, SKU, `/pay/:id`, Shopify).
+6. `docs/specs/` — sources métier réelles (CDC SKU, BDD app, collections/ID, fiches techniques/BOM, inventaire).
+7. `docs/archive/` — anciens `CLAUDE.md`/`CONTEXT.md` V1 (**périmés**, conservés pour historique seulement).
 
 ## Décisions techniques actées (V2)
 - **Refonte complète**, pas de refactoring du V1.
@@ -46,8 +48,9 @@ Antigravity), en reprise de lead. Le code V1 est figé en référence lecture se
 - Commits : `fix:` `feat:` `refactor:` `security:` `data:` `ux:` `chore:` `test:`.
 
 ## Prochaine étape
-Voir le **suivi de projet à jour dans `CADRAGE_V2.md` §5** (état réel + priorités P1→P5).
-Résumé au 2026-06-06 : backend V2 déployé sur Render, app Shopify perso opérationnelle, commande
-#1057 récupérée, watchdog réconciliation Stripe↔Shopify en place. Suite : **P1** finaliser la
-stabilisation sync (clés Stripe, alerte email, auth JWT, outbox), **P2** anomalies fonctionnelles,
-**P3** expérience client + POS V2, **P4** brique ERP (appro → production → préparation), **P5** Trunk Shows/analytics.
+Cible fonctionnelle dans **`SPEC_FONCTIONNEL_V2.md`** (roadmap re-séquencée par dépendances).
+État au 2026-06-07 : backend déployé (auth JWT + Postgres + watchdog Stripe↔Shopify), frontend V2
+en ligne (menu bas, i18n, €/$), moteur SKU codé+testé. **Prochaine brique : #1 Admin/référentiel**
+(matières avec ID, couleurs, options, ateliers, fournisseurs, frais de transport) + **import de la
+base** `docs/specs/` — car tout formulaire (Collection/POS) en dépend. Puis #2 Collection/PLM (SKU
+intégré), #3 POS (TPE S710 + taxes), #4 Inventaire/production, #5 CRM/Ventes, #6 header/KPIs.
