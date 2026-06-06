@@ -13,6 +13,7 @@ import { authRouter } from './routes/auth';
 import { erpRouter } from './routes/erp';
 import { refRouter } from './routes/ref';
 import { productsRouter } from './routes/products';
+import { crmRouter } from './routes/crm';
 import { dbHealthRouter } from './routes/dbHealth';
 import { erpUiRouter } from './routes/erpUi';
 import { reconcile } from './services/reconciliation';
@@ -73,6 +74,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/erp', erpRouter);
 app.use('/api/ref', refRouter);
 app.use('/api/products', productsRouter);
+app.use('/api/crm', crmRouter);
 app.use('/api/db', dbHealthRouter);
 app.use('/app', erpUiRouter);
 

@@ -198,6 +198,60 @@ export async function createRecoveryOrder(input: RecoveryOrderInput): Promise<Or
   });
 }
 
+// ─── CRM (clients Shopify) ──────────────────────────────────────────────────
+export async function searchCustomers(q: string): Promise<unknown> {
+  return shopifyGraphQL(
+    `query($q: String!) {
+      customers(first: 25, query: $q) {
+        nodes {
+          id firstName lastName email phone
+          numberOfOrders
+          amountSpent { amount currencyCode }
+          defaultAddress { city zip province country }
+        }
+      }
+    }`,
+    { q },
+  );
+}
+
+export async function getCustomerDetail(id: string): Promise<unknown> {
+  return shopifyGraphQL(
+    `query($id: ID!) {
+      customer(id: $id) {
+        id firstName lastName email phone note tags
+        numberOfOrders
+        amountSpent { amount currencyCode }
+        defaultAddress { address1 address2 city zip province country phone }
+        orders(first: 25, sortKey: CREATED_AT, reverse: true) {
+          nodes { name createdAt displayFinancialStatus totalPriceSet { presentmentMoney { amount currencyCode } } }
+        }
+      }
+    }`,
+    { id },
+  );
+}
+
+export interface CustomerCreateInput {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  note?: string;
+}
+
+export async function createCustomer(input: CustomerCreateInput): Promise<unknown> {
+  return shopifyGraphQL(
+    `mutation($input: CustomerInput!) {
+      customerCreate(input: $input) {
+        customer { id firstName lastName email }
+        userErrors { field message }
+      }
+    }`,
+    { input },
+  );
+}
+
 interface RecentOrdersResult {
   orders: {
     nodes: {
