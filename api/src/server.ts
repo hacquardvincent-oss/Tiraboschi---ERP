@@ -22,20 +22,9 @@ const app = express();
 // Frontend React (build Vite) servi par l'API — un seul service, comme la V1. web/dist depuis api/dist.
 const WEB_DIST = path.join(__dirname, '..', '..', 'web', 'dist');
 
-// CORS : utile seulement en dev (frontend Vite sur un autre port). En prod c'est la même origine.
-const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean)
-  .concat(['http://localhost:5173', 'http://localhost:4173']);
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-      return cb(new Error('CORS bloqué : ' + origin));
-    },
-  }),
-);
+// Frontend servi par la même origine que l'API → CORS permissif (reflète l'origine).
+// (Utile seulement pour le dev cross-port ; aucune origine n'est bloquée.)
+app.use(cors({ origin: true }));
 
 app.use(express.json());
 
