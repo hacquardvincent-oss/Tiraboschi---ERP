@@ -5,6 +5,7 @@ import { Placeholder } from '../pages/Placeholder';
 import { Inventaire } from '../pages/Inventaire';
 import { Collection } from '../pages/Collection';
 import { Admin } from '../pages/Admin';
+import { Pos } from '../pages/Pos';
 import type { Section } from '../sections';
 
 function Page({ section }: { section: Section }) {
@@ -15,10 +16,10 @@ function Page({ section }: { section: Section }) {
       return <Collection />;
     case 'admin':
       return <Admin />;
+    case 'pos':
+      return <Pos />;
     case 'dashboard':
       return <Placeholder titleKey="nav.dashboard" />;
-    case 'pos':
-      return <Placeholder titleKey="nav.pos" />;
     case 'crm':
       return <Placeholder titleKey="nav.crm" />;
     case 'sales':
