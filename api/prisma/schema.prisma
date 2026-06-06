@@ -47,6 +47,46 @@ model RefItem {
   @@index([category])
 }
 
+// ─── PLM : fiche technique produit (Collection) ───────────────────────────────
+model Product {
+  id   String @id @default(cuid())
+  sku  String @unique
+  name String
+
+  // Composants du SKU (codes issus du référentiel)
+  modelCode    String?
+  yearCode     String?
+  seasonCode   String?
+  materialCode String? // ex. CU002 / CE001
+  optionCode   String?
+  colorCode    String?
+  sizeCode     String?
+
+  // BOM (nomenclature) — codes du référentiel + détails libres
+  animalCode   String?
+  skinTypeCode String?
+  liningCode   String?
+  atelierCode  String?
+  supplierCode String?
+  jewelryCodes String[] @default([])
+  packaging    String?
+  bom          Json?
+
+  // Finance
+  priceHtEur   Decimal? @db.Decimal(12, 2)
+  priceHtUsd   Decimal? @db.Decimal(12, 2)
+  costMaterial Decimal? @db.Decimal(12, 2)
+  costMaking   Decimal? @db.Decimal(12, 2)
+
+  // Sync Shopify
+  shopifyProductId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
 // ─── RÉFÉRENTIELS ─────────────────────────────────────────────────────────────
 enum MaterialCategory {
   LEATHER // peaux
