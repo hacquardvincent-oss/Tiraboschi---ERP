@@ -188,6 +188,8 @@ auth bcrypt + JWT · i18n FR/EN.
 - ✅ **Postgres (Neon) + Prisma** : 13 tables ERP migrées en prod (migration auto au boot) — `/api/db/health`
 - ✅ **Auth JWT** (P1) : bcrypt + login `/api/auth/login` + middleware par rôle + seed admin
 - ✅ **ERP module 1** (P4) : référentiels **matières / fournisseurs / ateliers** + **mouvements de stock** (ledger) + niveau de stock — API `/api/erp/*` + **console web `/app`** (login + pilotage, sans terminal)
+- ✅ **Frontend V2** (P3) : React+Vite+Tailwind reprenant l'UX V1 (Blue Sole, menu bas, i18n FR/EN, €/$), servi par l'API en **fichier unique inliné** (contourne un blocage de chargement de module externe en prod), login JWT OK
+- ✅ **Moteur SKU** (P4/PLM) : règles du CDC (`docs/specs/CDC_calcul_SKU.docx`) — service typé + **tests Vitest (7/7)** + endpoint `/api/erp/sku/preview` + **générateur dans l'onglet Collection**
 
 **À finaliser pour clore la stabilisation sync (reporté) :**
 - [ ] Renseigner les clés Stripe `STRIPE_API_KEY_FR` / `_US` (lecture) dans Render → watchdog *live*
