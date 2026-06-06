@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import { config } from './config';
@@ -17,7 +18,10 @@ import { seedAdmin } from './services/seed';
 
 const app = express();
 
-// CORS : autorise le frontend (FRONTEND_ORIGIN, liste séparée par des virgules) + localhost dev.
+// Frontend React (build Vite) servi par l'API — un seul service, comme la V1. web/dist depuis api/dist.
+const WEB_DIST = path.join(__dirname, '..', '..', 'web', 'dist');
+
+// CORS : utile seulement en dev (frontend Vite sur un autre port). En prod c'est la même origine.
 const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? '')
   .split(',')
   .map((s) => s.trim())
@@ -34,9 +38,8 @@ app.use(
 
 app.use(express.json());
 
-app.get('/', (_req, res) => {
-  res.json({ name: 'Tiraboschi ERP API (V2)', status: 'ok' });
-});
+// Fichiers statiques du frontend (assets, manifest, sw…)
+app.use(express.static(WEB_DIST));
 
 app.use('/api', healthRouter);
 app.use('/api/recovery', recoveryRouter);
@@ -47,6 +50,11 @@ app.use('/api/auth', authRouter);
 app.use('/api/erp', erpRouter);
 app.use('/api/db', dbHealthRouter);
 app.use('/app', erpUiRouter);
+
+// Fallback SPA : toute route non-/api renvoie l'app React (client-side).
+app.get(/^(?!\/api\/).*/, (_req, res) => {
+  res.sendFile(path.join(WEB_DIST, 'index.html'));
+});
 
 /**
  * Au boot : applique les migrations Prisma (idempotent) puis seed l'admin.

@@ -1,5 +1,5 @@
-const API_URL: string =
-  (import.meta.env.VITE_API_URL as string | undefined) || 'https://tiraboschi-ops-v2.onrender.com';
+// Vide par défaut = même origine (le frontend est servi par l'API). En dev, mettre VITE_API_URL=http://localhost:3001
+const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 let token: string | null = localStorage.getItem('tiraboschi_token');
 
