@@ -6,6 +6,7 @@ import { recoveryUiRouter } from './routes/recoveryUi';
 import { reconciliationRouter } from './routes/reconciliation';
 import { reconciliationUiRouter } from './routes/reconciliationUi';
 import { reconcile } from './services/reconciliation';
+import { sendAlert } from './services/alert';
 
 const app = express();
 app.use(express.json());
@@ -35,9 +36,12 @@ function startWatchdog(): void {
       const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const report = await reconcile(since);
       if (report.missing.length > 0) {
-        console.warn(
-          `[watchdog] ⚠️ ${report.missing.length} paiement(s) Stripe sans commande Shopify depuis ${since} :`,
-          report.missing.map((m) => `${m.account}:${m.id} ${m.amount}${m.currency}`).join(', '),
+        const detail = report.missing
+          .map((m) => `${m.account}:${m.id} ${m.amount}${m.currency}`)
+          .join(', ');
+        console.warn(`[watchdog] ⚠️ ${report.missing.length} paiement(s) Stripe sans commande Shopify depuis ${since} : ${detail}`);
+        await sendAlert(
+          `⚠️ Tiraboschi ERP — ${report.missing.length} paiement(s) Stripe encaissé(s) SANS commande Shopify (depuis ${since}) : ${detail}`,
         );
       } else {
         console.log(`[watchdog] OK — ${report.matched} paiements réconciliés depuis ${since}.`);

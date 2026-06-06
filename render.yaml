@@ -27,3 +27,5 @@ services:
         sync: false
       - key: STRIPE_API_KEY_US
         sync: false
+      - key: ALERT_WEBHOOK_URL
+        sync: false
