@@ -28,10 +28,17 @@
             '\n\nErreurs : ' + (window.__errs.join(' | ') || '(aucune)') +
             '\n\nUA : ' + navigator.userAgent + (extra || '') + '</pre>';
         }
-        show('\n\n(test fetch en cours…)');
+        show('\n\n(tests en cours…)');
         if (s) {
           fetch(src).then(function (resp) {
-            show('\n\nFETCH status: ' + resp.status + '\ncontent-type: ' + resp.headers.get('content-type'));
+            var ct = resp.headers.get('content-type');
+            // import() dynamique : révèle l'erreur de parsing/exécution (le <script> ne la donne pas)
+            import(src).then(function () {
+              show('\n\nFETCH 200 ct=' + ct + '\nIMPORT: OK (le module fonctionne via import dynamique)');
+            }).catch(function (err) {
+              show('\n\nFETCH 200 ct=' + ct + '\nIMPORT erreur: ' +
+                (err && err.message ? err.message : String(err)) + '\n' + (err && err.stack ? err.stack : ''));
+            });
           }).catch(function (err) { show('\n\nFETCH erreur: ' + err.message); });
         }
       }, 4000);
