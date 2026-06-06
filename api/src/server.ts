@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import express from 'express';
 import { config } from './config';
 import { healthRouter } from './routes/health';
@@ -5,8 +6,12 @@ import { recoveryRouter } from './routes/recovery';
 import { recoveryUiRouter } from './routes/recoveryUi';
 import { reconciliationRouter } from './routes/reconciliation';
 import { reconciliationUiRouter } from './routes/reconciliationUi';
+import { authRouter } from './routes/auth';
+import { erpRouter } from './routes/erp';
+import { dbHealthRouter } from './routes/dbHealth';
 import { reconcile } from './services/reconciliation';
 import { sendAlert } from './services/alert';
+import { seedAdmin } from './services/seed';
 
 const app = express();
 app.use(express.json());
@@ -20,6 +25,27 @@ app.use('/api/recovery', recoveryRouter);
 app.use('/recovery', recoveryUiRouter);
 app.use('/api/reconciliation', reconciliationRouter);
 app.use('/reconciliation', reconciliationUiRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/erp', erpRouter);
+app.use('/api/db', dbHealthRouter);
+
+/**
+ * Au boot : applique les migrations Prisma (idempotent) puis seed l'admin.
+ * Résilient : en cas d'échec, on log et on continue (les autres routes restent up).
+ */
+function initDatabase(): void {
+  if (!process.env.DATABASE_URL) {
+    console.log('[db] DATABASE_URL absent — fonctions base (auth/ERP) désactivées.');
+    return;
+  }
+  try {
+    console.log('[db] application des migrations (prisma migrate deploy)…');
+    execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+  } catch (err) {
+    console.error('[db] échec migrate deploy :', (err as Error).message);
+  }
+  seedAdmin().catch((e) => console.error('[seed] erreur :', (e as Error).message));
+}
 
 /**
  * Watchdog : vérifie périodiquement les paiements Stripe non synchronisés dans Shopify.
@@ -57,5 +83,6 @@ function startWatchdog(): void {
 
 app.listen(config.port, () => {
   console.log(`API V2 à l'écoute sur le port ${config.port} (env: ${config.nodeEnv})`);
+  initDatabase();
   startWatchdog();
 });
