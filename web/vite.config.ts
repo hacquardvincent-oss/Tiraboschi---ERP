@@ -1,21 +1,11 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { viteSingleFile } from 'vite-plugin-singlefile';
 
-// Retire l'attribut crossorigin des balises générées (inutile en même origine).
-// order:'post' pour passer APRÈS l'injection des balises par Vite.
-function stripCrossorigin(): Plugin {
-  return {
-    name: 'strip-crossorigin',
-    transformIndexHtml: {
-      order: 'post',
-      handler(html) {
-        return html.replace(/\s+crossorigin/g, '');
-      },
-    },
-  };
-}
-
+// Tout le JS/CSS est inliné dans index.html (un seul fichier servi).
+// Contourne le blocage du chargement de module externe constaté en prod
+// (les scripts inline, eux, s'exécutent — le diagnostic le prouve).
 export default defineConfig({
-  plugins: [react(), stripCrossorigin()],
+  plugins: [react(), viteSingleFile()],
   build: { target: 'es2019' },
 });
