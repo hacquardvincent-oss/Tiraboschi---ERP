@@ -33,18 +33,23 @@ app.use('/api/db', dbHealthRouter);
  * Au boot : applique les migrations Prisma (idempotent) puis seed l'admin.
  * Résilient : en cas d'échec, on log et on continue (les autres routes restent up).
  */
-function initDatabase(): void {
+async function initDatabase(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     console.log('[db] DATABASE_URL absent — fonctions base (auth/ERP) désactivées.');
     return;
   }
   try {
     console.log('[db] application des migrations (prisma migrate deploy)…');
-    execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+    execSync('npx --no-install prisma migrate deploy', { stdio: 'inherit' });
+    console.log('[db] migrations à jour.');
   } catch (err) {
     console.error('[db] échec migrate deploy :', (err as Error).message);
   }
-  seedAdmin().catch((e) => console.error('[seed] erreur :', (e as Error).message));
+  try {
+    await seedAdmin();
+  } catch (e) {
+    console.error('[seed] erreur :', (e as Error).message);
+  }
 }
 
 /**
@@ -81,8 +86,13 @@ function startWatchdog(): void {
   console.log(`[watchdog] activé (intervalle ${Math.round(intervalMs / 3600000)}h).`);
 }
 
-app.listen(config.port, () => {
-  console.log(`API V2 à l'écoute sur le port ${config.port} (env: ${config.nodeEnv})`);
-  initDatabase();
-  startWatchdog();
-});
+async function bootstrap(): Promise<void> {
+  // Migrations + seed AVANT d'ouvrir le port (le serveur n'accepte du trafic qu'une fois prêt).
+  await initDatabase();
+  app.listen(config.port, () => {
+    console.log(`API V2 à l'écoute sur le port ${config.port} (env: ${config.nodeEnv})`);
+    startWatchdog();
+  });
+}
+
+bootstrap();
