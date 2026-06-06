@@ -131,5 +131,9 @@ Workflow complet (cf. `docs/specs/Inventaire…xlsx` + `CADRAGE_V2.md` §5 P4) :
 ## 11. État au 2026-06-07
 - ✅ Backend déployé, auth JWT, ERP module 1 (matières/fournisseurs/ateliers/mouvements), watchdog.
 - ✅ Frontend V2 (menu bas, i18n, €/$), login OK.
-- ✅ Moteur SKU (CDC) + tests — **à intégrer dans le formulaire Collection** (prochaine étape brique 2).
-- ⏭️ **Prochaine étape : brique 1 — Admin/référentiel + import de la base** (`docs/specs/`).
+- ✅ Moteur SKU (CDC) + tests.
+- ✅ **Brique 1 — Référentiel Admin** : `RefItem` + seed 17 dictionnaires + API `/api/ref` + écran Admin.
+- ✅ **Brique 2 — Collection/PLM** : `Product` + API `/api/products` (CRUD+recherche, SKU serveur) +
+  écran catalogue/recherche + fiche technique pilotée par le référentiel (dropdowns) + SKU auto.
+- ⏭️ **Prochaines** : import matières réelles (`docs/specs/`, arbitrages à trancher) · édition de fiche ·
+  **sync Shopify** (pull collection + push) · brique 3 **POS** (TPE S710 + taxes).
