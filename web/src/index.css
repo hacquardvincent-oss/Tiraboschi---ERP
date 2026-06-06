@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-ink text-white font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply uppercase tracking-editorial;
+  }
+}
+
+@layer components {
+  /* Bouton noir + ligne d'ombre azur (rappel de la semelle) */
+  .btn {
+    @apply bg-ink text-white px-4 py-3 rounded font-medium;
+    box-shadow: 0 2px 0 0 theme('colors.azure');
+  }
+  .btn:active {
+    @apply translate-y-px;
+  }
+  .field {
+    @apply w-full px-3 py-3 rounded bg-white/5 border border-white/15 text-white outline-none;
+    min-height: 44px;
+  }
+  .field:focus {
+    @apply border-azure;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.3);
+  }
+  .card {
+    @apply bg-panel border border-white/10 rounded p-4;
+  }
+}

@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import express from 'express';
+import cors from 'cors';
 import { config } from './config';
 import { healthRouter } from './routes/health';
 import { recoveryRouter } from './routes/recovery';
@@ -15,6 +16,22 @@ import { sendAlert } from './services/alert';
 import { seedAdmin } from './services/seed';
 
 const app = express();
+
+// CORS : autorise le frontend (FRONTEND_ORIGIN, liste séparée par des virgules) + localhost dev.
+const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .concat(['http://localhost:5173', 'http://localhost:4173']);
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error('CORS bloqué : ' + origin));
+    },
+  }),
+);
+
 app.use(express.json());
 
 app.get('/', (_req, res) => {
