@@ -184,7 +184,10 @@ auth bcrypt + JWT · i18n FR/EN.
 - ✅ **Backend V2** scaffolding (Express + TS) **déployé sur Render** (`api/`, health checks)
 - ✅ **App perso Shopify** (flux `client_credentials`, scopes `write_orders`) — domaine corrigé `axp150-71.myshopify.com`
 - ✅ **Outil de récupération** (page `/recovery`, `orderCreate` exact) → **commande #1057 récupérée** (taxe US réelle, 732,71 $)
-- ✅ **Watchdog réconciliation** Stripe ↔ Shopify (multi-comptes FR/US, page `/reconciliation`, check périodique → alerte logs)
+- ✅ **Watchdog réconciliation** Stripe ↔ Shopify (multi-comptes FR/US, page `/reconciliation`, check périodique) + **alerte webhook** (Slack/Discord)
+- ✅ **Postgres (Neon) + Prisma** : 13 tables ERP migrées en prod (migration auto au boot) — `/api/db/health`
+- ✅ **Auth JWT** (P1) : bcrypt + login `/api/auth/login` + middleware par rôle + seed admin
+- ✅ **ERP module 1** (P4) : référentiels **matières / fournisseurs / ateliers** + **mouvements de stock** (ledger) + niveau de stock — API `/api/erp/*` + **console web `/app`** (login + pilotage, sans terminal)
 
 **À finaliser pour clore la stabilisation sync (reporté) :**
 - [ ] Renseigner les clés Stripe `STRIPE_API_KEY_FR` / `_US` (lecture) dans Render → watchdog *live*
