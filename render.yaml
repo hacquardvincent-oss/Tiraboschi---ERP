@@ -21,3 +21,5 @@ services:
         sync: false
       - key: SHOPIFY_CLIENT_SECRET
         sync: false
+      - key: RECOVERY_KEY
+        sync: false
