@@ -39,8 +39,14 @@ app.use(
 
 app.use(express.json());
 
-// Fichiers statiques du frontend (assets, manifest, sw…)
-app.use(express.static(WEB_DIST));
+// Fichiers statiques du frontend. index.html en no-cache (les assets sont hashés, donc cachables).
+app.use(
+  express.static(WEB_DIST, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+    },
+  }),
+);
 
 // Diagnostic public : où en est le frontend servi (chemins + fichiers présents).
 app.get('/api/diag', (_req, res) => {
@@ -74,6 +80,7 @@ app.use('/app', erpUiRouter);
 
 // Fallback SPA : toute route non-/api renvoie l'app React (client-side).
 app.get(/^(?!\/api\/).*/, (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(WEB_DIST, 'index.html'));
 });
 
