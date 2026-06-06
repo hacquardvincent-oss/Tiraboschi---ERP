@@ -13,11 +13,12 @@ Antigravity), désormais en reprise de lead.
 |---|---|
 | **[CADRAGE_V2.md](./CADRAGE_V2.md)** ⭐ | Cadrage vivant de la V2 : vision, stack, périmètre, roadmap, décisions actées |
 | **[AUDIT_V1.md](./AUDIT_V1.md)** | Audit indépendant du code V1 (vérifié source) : ce qui marche, ce qui ne va pas, ce qu'on fait mieux |
-| [HANDOFF_V2_SCOPING.md](./HANDOFF_V2_SCOPING.md) | Audit de cadrage d'une session précédente (référence) |
+| [docs/HANDOFF_V2_SCOPING.md](./docs/HANDOFF_V2_SCOPING.md) | Audit de cadrage d'une session précédente (référence) |
 | [legacy-v1/](./legacy-v1/) | Snapshot du code V1 **en lecture seule** (code + données + logique métier extraite) |
+| [CLAUDE.md](./CLAUDE.md) | Mémoire projet chargée au début de chaque session |
 
-> Les anciens `CLAUDE.md` / `CONTEXT.md` (ère V1) sont **partiellement périmés** (bugs déjà corrigés,
-> décisions abandonnées). `CADRAGE_V2.md` + `AUDIT_V1.md` font foi.
+> Les anciens `CLAUDE.md` / `CONTEXT.md` (ère V1) sont **périmés** et archivés dans
+> [`docs/archive/`](./docs/archive/). `CADRAGE_V2.md` + `AUDIT_V1.md` font foi.
 
 ## État
 
