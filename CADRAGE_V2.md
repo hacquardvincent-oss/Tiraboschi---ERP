@@ -222,7 +222,7 @@ auth bcrypt + JWT · i18n FR/EN.
 `create_payment_link` + `/pay/:id` (contourne WebView WhatsApp/Instagram) + webhook **signé**.
 
 ### Shopify Admin API — 🟡 v2024-01 → **à moderniser en V2**
-Store `tiraboschi-paris.myshopify.com` · Auth via `client_credentials` (à reconfirmer/sécuriser) ·
+Store `axp150-71.myshopify.com` · Auth via `client_credentials` (à reconfirmer/sécuriser) ·
 Commandes/clients/inventaire/Draft Orders (taxes US) · **manque pagination cursor** (`limit=250`).
 **V2 actée** : montée de version récente + **GraphQL** + pagination cursor, encapsulé dans un service de sync.
 **Auth V2** : app personnalisée Shopify dédiée avec **token offline `write_orders`** (remplace le `client_credentials` V1, fragile).
