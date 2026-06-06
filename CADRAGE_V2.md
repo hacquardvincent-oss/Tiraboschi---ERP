@@ -176,40 +176,77 @@ auth bcrypt + JWT · i18n FR/EN.
 
 ---
 
-## 5. Roadmap par phases
+## 5. Suivi de projet & roadmap
 
-### Phase 0 — Fondations (bloquant)
-- [ ] Récupérer / snapshot le code V1 (`legacy-v1/`) pour extraire la logique métier exacte
-- [ ] Scaffolding repo V2 (api + web, TS, lint, CI)
-- [ ] Schéma Prisma + Postgres managé (Render/Neon) + `.env.example` + secrets hors code
-- [ ] Scripts d'import one-shot : `data/*.json` V1 + inventaire Google Drive → Postgres
-- [ ] Auth bcrypt + JWT + rate-limit
+### État au 2026-06-06 (avancement réel)
+**Fait :**
+- ✅ Cadrage + audit V1 (`AUDIT_V1.md`, docs d'autorité, repo réorganisé, `legacy-v1/` figé)
+- ✅ **Backend V2** scaffolding (Express + TS) **déployé sur Render** (`api/`, health checks)
+- ✅ **App perso Shopify** (flux `client_credentials`, scopes `write_orders`) — domaine corrigé `axp150-71.myshopify.com`
+- ✅ **Outil de récupération** (page `/recovery`, `orderCreate` exact) → **commande #1057 récupérée** (taxe US réelle, 732,71 $)
+- ✅ **Watchdog réconciliation** Stripe ↔ Shopify (multi-comptes FR/US, page `/reconciliation`, check périodique → alerte logs)
 
-### Phase 1 — Cœur métier POS
-- [ ] SKU engine (nouveau format + incrément séquentiel) + tests
-- [ ] Calcul taxes FR/EU/US (Sur Place + DDP) + tests
-- [ ] Wizard POS + Stripe Terminal S710
-- [ ] Liens de paiement + `/pay/:id` + webhook signé
-- [ ] **Client Shopify nouvelle version + GraphQL** (service de sync encapsulé, pagination cursor)
-- [ ] Sync commande Shopify à la vente
+**À finaliser pour clore la stabilisation sync (reporté) :**
+- [ ] Renseigner les clés Stripe `STRIPE_API_KEY_FR` / `_US` (lecture) dans Render → watchdog *live*
+- [ ] Alerte **réelle** (email/Slack) au lieu des logs
+- [ ] **Auth JWT** + rate-limit (remplacer la garde provisoire `RECOVERY_KEY`)
 
-### Phase 2 — ERP / Stock (transactionnel)
-- [ ] Catalogue + fiches + BOM (modèle canonique local, projection Shopify)
-- [ ] Stock + mouvements (transactions atomiques) + alertes
-- [ ] **Numéro de série unique par pièce** + statuts (prod/QC/dispo/expédié/retour) + localisation
-- [ ] Auto-décrémentation stock à la vente
-- [ ] Import/Export Excel (UI)
+> Provisoires à retirer en V2 : pages `/recovery` et `/reconciliation` gardées par `RECOVERY_KEY`.
 
-### Phase 3 — Événements / CRM / Reporting / Admin
-- [ ] Objet Événement (Trunk Show) + rapport par événement
-- [ ] CRM Shopify + RGPD
-- [ ] Historique ventes + KPIs (source unique Shopify) + dashboard analytics
-- [ ] Admin users + config
+### Priorités suivantes (ordre voulu)
 
-### Phase 4 — Mobile + bascule master app
-- [ ] PWA + mode hors-ligne
-- [ ] **Sens app→Shopify** : création produits PLM + gestion inventaires poussés vers Shopify (palier cible)
-- [ ] PDF facture + passeport produit QR (n° de série)
+**P1 — Finaliser la stabilisation des enregistrements de commande Shopify** *(plus tard)*
+- [ ] Watchdog : alerte email/Slack + planification fiable
+- [ ] **Écriture fiable** : pattern **outbox** (vente → file de sync, en transaction) + **idempotence** (clé PaymentIntent) + **retries** + **statut de sync par vente** (fin de l'échec silencieux) — se branche avec le POS V2
+- [ ] Auth JWT
+
+**P2 — Reprise des anomalies fonctionnelles (dette V1)**
+- [ ] **Bugs d'affichage** : récap POS, alertes stock, noms de couleurs, groupement catalogue (cf. `legacy-v1/HISTORY_PROBLEMS.md`)
+- [ ] **Code mort** : MongoDB, fallbacks dupliqués, scripts hotfix — éliminés à la refonte
+- [ ] **Appels inutiles** : `prestart` rejouant des migrations, pagination Shopify absente, `await` sur fonctions sync
+- [ ] **Bug conversion EUR/USD** au POS (cf. `AUDIT_V1.md` §2 — surfacturation constatée)
+
+**P3 — Expérience client**
+- [ ] **POS V2 (caisse)** : wizard, Stripe Terminal S710, liens de paiement + `/pay/:id` (réimplémentation propre)
+- [ ] UX mobile (touch targets ≥44px, navigation), **PWA** installable + hors-ligne
+- [ ] PDF facture, reçus, parcours de paiement soigné
+
+**P4 — Brique ERP (chantier majeur) : Approvisionnement → Production → Préparation**
+
+*Fait de l'app le master de l'inventaire (matières ET pièces). Modèle relationnel Postgres adapté.*
+
+Référentiels :
+- [ ] **Matières** : codification / **ID matières**, fiche matière, coût unitaire
+- [ ] **Fournisseurs matières** & **Ateliers de production** (référentiels + conditions)
+
+Approvisionnement & inventaire matières :
+- [ ] **Bon de commande** fournisseur (PO)
+- [ ] **Bon de réception** matières → **arrivée entrepôt** (entrée en stock)
+- [ ] **Pilotage inventaire** matières : niveaux, seuils d'alerte, **valorisation comptable des achats** (qté × coût)
+- [ ] **Mouvements de stock** (ledger transactionnel) :
+  - entrée entrepôt
+  - **sortie de stock exceptionnelle** (casse, perte, échantillon)
+  - **sortie de stock vers ateliers** + **matières en transit** vers l'atelier
+  - retours / réintégrations
+
+Production :
+- [ ] **Ordre de production** vers les ateliers, **déclenché par les commandes clients** (MRP léger : commande → besoin pièce → OP → consommation BOM)
+- [ ] Suivi des matières consommées / en transit atelier
+- [ ] **Bon de réception des pièces produites** (entrée pièces finies + **n° de série** par pièce)
+
+Préparation / fulfillment :
+- [ ] **Suivi des commandes à préparer** (pièce disponible → commande prête → expédition)
+
+**P5 — Métier événementiel & analytics** (rappel)
+- [ ] Objet **Trunk Show** (lieu, date, vendeurs, rapport par événement)
+- [ ] CRM Shopify + RGPD · KPIs (source unique Shopify) · dashboard analytics
+- [ ] Bascule **app → Shopify** (création produits PLM + push inventaires) — palier master
+
+### Entités ERP cibles (Prisma) — pour la P4
+`Material` (ID matière) · `Supplier` · `Workshop` (atelier) · `PurchaseOrder` + `PurchaseOrderLine` ·
+`GoodsReceipt` (matières) · `StockMovement` (ledger : entrée/sortie exceptionnelle/sortie atelier/transit/retour) ·
+`ProductionOrder` (lié `Order`/commande client + `BOM`) · `FinishedPieceReceipt` (+ `Serial`) ·
+`FulfillmentTask` (commandes à préparer).
 
 ---
 

@@ -46,5 +46,8 @@ Antigravity), en reprise de lead. Le code V1 est figé en référence lecture se
 - Commits : `fix:` `feat:` `refactor:` `security:` `data:` `ux:` `chore:` `test:`.
 
 ## Prochaine étape
-Scaffolding **Phase 0** : structure `api/` + `web/` (TS), Prisma/Postgres, **auth serveur réelle**, CI ;
-scripts d'import one-shot (`data/*.json` V1 + inventaire Google Drive → Postgres).
+Voir le **suivi de projet à jour dans `CADRAGE_V2.md` §5** (état réel + priorités P1→P5).
+Résumé au 2026-06-06 : backend V2 déployé sur Render, app Shopify perso opérationnelle, commande
+#1057 récupérée, watchdog réconciliation Stripe↔Shopify en place. Suite : **P1** finaliser la
+stabilisation sync (clés Stripe, alerte email, auth JWT, outbox), **P2** anomalies fonctionnelles,
+**P3** expérience client + POS V2, **P4** brique ERP (appro → production → préparation), **P5** Trunk Shows/analytics.
