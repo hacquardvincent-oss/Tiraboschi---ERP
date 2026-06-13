@@ -29,6 +29,8 @@ export function Pos() {
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
   const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedRef, setSavedRef] = useState('');
 
   const search = async (query: string) => {
     setQ(query);
@@ -68,6 +70,51 @@ export function Pos() {
 
   const sym = currency === 'EUR' ? '€' : '$';
   const fmt = (n: number) => n.toFixed(2) + ' ' + sym;
+
+  async function saveSale() {
+    setErr('');
+    setSavedRef('');
+    if (cart.length === 0) {
+      setErr('Panier vide.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const items = cart.map((l) => ({
+        title: l.name,
+        sku: l.sku,
+        priceCents: Math.round(l.unitHt * 100),
+        qty: l.qty,
+      }));
+      const taxLines = [
+        {
+          title: currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)',
+          rate: currency === 'EUR' ? 0.2 : (parseFloat(usTaxRate) || 0) / 100,
+          amountCents: Math.round(tax * 100),
+        },
+      ];
+      const sale = await api<{ reference: string }>('/api/pos/sales', {
+        method: 'POST',
+        body: {
+          market: currency === 'EUR' ? 'FR' : 'US',
+          currency,
+          customerEmail: customer.email || undefined,
+          customerName: customer.name || undefined,
+          items,
+          taxLines,
+          shippingCents: ddp ? Math.round(ship * 100) : 0,
+        },
+      });
+      setSavedRef(sale.reference);
+      setCart([]);
+      setCustomer({ name: '', email: '' });
+      setDdp(false);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -155,16 +202,26 @@ export function Pos() {
         </div>
       </div>
 
-      {/* Paiement (3b) */}
+      {/* Encaissement */}
       <div className="card">
         <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Encaissement</div>
-        <div className="grid grid-cols-2 gap-3">
-          <button className="btn opacity-50" disabled title="À brancher (3b)">TPE Stripe S710</button>
-          <button className="btn opacity-50" disabled title="À brancher (3b)">Lien de paiement</button>
+        <button className="btn w-full" onClick={saveSale} disabled={saving || cart.length === 0}>
+          {saving ? 'Enregistrement…' : 'Enregistrer la commande'}
+        </button>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <button className="btn opacity-50" disabled title="À brancher (3b.2/3b.3)">TPE Stripe S710</button>
+          <button className="btn opacity-50" disabled title="À brancher (3b.2/3b.3)">Lien de paiement</button>
         </div>
         <p className="text-white/40 text-[11px] mt-2">
-          Paiement à brancher (étape 3b) : SDK Stripe Terminal S710 + lien de paiement — nécessite la clé Stripe (write).
+          La commande est enregistrée (durable) puis apparaît dans <b>Ventes</b> pour encaissement. Le paiement
+          Stripe (lien + TPE S710) est l'étape 3b ; dès succès, la commande Shopify est créée automatiquement
+          (avec retries) — impossible à perdre.
         </p>
+        {savedRef && (
+          <p className="text-green-400 text-sm mt-2">
+            Vente <b>{savedRef}</b> enregistrée → onglet <b>Ventes</b> pour l'encaisser.
+          </p>
+        )}
       </div>
 
       {err && <p className="text-red-400 text-sm">{err}</p>}

@@ -14,6 +14,8 @@ import { erpRouter } from './routes/erp';
 import { refRouter } from './routes/ref';
 import { productsRouter } from './routes/products';
 import { crmRouter } from './routes/crm';
+import { salesRouter } from './routes/sales';
+import { processPendingSales } from './services/sales';
 import { dbHealthRouter } from './routes/dbHealth';
 import { erpUiRouter } from './routes/erpUi';
 import { reconcile } from './services/reconciliation';
@@ -75,6 +77,7 @@ app.use('/api/erp', erpRouter);
 app.use('/api/ref', refRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/crm', crmRouter);
+app.use('/api/pos/sales', salesRouter);
 app.use('/api/db', dbHealthRouter);
 app.use('/app', erpUiRouter);
 
@@ -153,6 +156,18 @@ function startWatchdog(): void {
   console.log(`[watchdog] activé (intervalle ${Math.round(intervalMs / 3600000)}h).`);
 }
 
+/**
+ * Worker outbox : rejoue périodiquement les ventes payées non encore créées dans Shopify
+ * (retries bornés, idempotent). Garantit qu'aucun encaissement ne reste sans commande.
+ */
+function startSyncWorker(): void {
+  if (!process.env.DATABASE_URL) return;
+  const run = () => processPendingSales().catch((e) => console.error('[sync] erreur :', (e as Error).message));
+  setTimeout(run, 20_000);
+  setInterval(run, 2 * 60 * 1000); // toutes les 2 min
+  console.log('[sync] worker de synchronisation des ventes activé.');
+}
+
 async function bootstrap(): Promise<void> {
   // Migrations + seed AVANT d'ouvrir le port (le serveur n'accepte du trafic qu'une fois prêt).
   await initDatabase();
@@ -160,6 +175,7 @@ async function bootstrap(): Promise<void> {
     console.log(`API V2 à l'écoute sur le port ${config.port} (env: ${config.nodeEnv})`);
     console.log(`[web] WEB_DIST=${WEB_DIST} existe=${fs.existsSync(WEB_DIST)} index=${fs.existsSync(path.join(WEB_DIST, 'index.html'))}`);
     startWatchdog();
+    startSyncWorker();
   });
 }
 

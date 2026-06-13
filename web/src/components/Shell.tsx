@@ -7,6 +7,7 @@ import { Collection } from '../pages/Collection';
 import { Admin } from '../pages/Admin';
 import { Pos } from '../pages/Pos';
 import { Crm } from '../pages/Crm';
+import { Sales } from '../pages/Sales';
 import type { Section } from '../sections';
 
 function Page({ section }: { section: Section }) {
@@ -24,7 +25,7 @@ function Page({ section }: { section: Section }) {
     case 'dashboard':
       return <Placeholder titleKey="nav.dashboard" />;
     case 'sales':
-      return <Placeholder titleKey="nav.sales" />;
+      return <Sales />;
   }
 }
 
