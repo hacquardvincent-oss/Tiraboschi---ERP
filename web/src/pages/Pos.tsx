@@ -12,7 +12,8 @@ interface Product {
 }
 
 interface CartLine {
-  id: string;
+  uid: string; // clé interne (produit catalogue: id ; hors catalogue: hc-…)
+  id?: string; // id produit (catalogue uniquement → disponibilité)
   sku: string;
   name: string;
   unitHt: number; // prix HT unitaire dans la devise courante
@@ -70,10 +71,11 @@ export function Pos() {
   const [cartAvail, setCartAvail] = useState<{ readyDate: string | null; lines: CartAvailLine[] } | null>(null);
 
   useEffect(() => {
-    if (cart.length === 0) return setCartAvail(null);
+    const cat = cart.filter((l) => l.id);
+    if (cat.length === 0) return setCartAvail(null);
     api<{ readyDate: string | null; lines: CartAvailLine[] }>('/api/catalog/availability', {
       method: 'POST',
-      body: { items: cart.map((l) => ({ id: l.id, qty: l.qty })) },
+      body: { items: cat.map((l) => ({ id: l.id, qty: l.qty })) },
     })
       .then(setCartAvail)
       .catch(() => setCartAvail(null));
@@ -92,29 +94,45 @@ export function Pos() {
   const priceOf = (p: Product) =>
     parseFloat((currency === 'EUR' ? p.priceHtEur : p.priceHtUsd) ?? '0') || 0;
 
-  const add = (p: Product) => {
-    setCart((c) => {
-      const i = c.findIndex((l) => l.sku === p.sku);
-      if (i >= 0) {
-        const copy = [...c];
-        copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
-        return copy;
-      }
-      return [...c, { id: p.id, sku: p.sku, name: p.name, unitHt: priceOf(p), qty: 1 }];
-    });
-    setQ('');
-    setResults([]);
+  const dirty = () => {
     // Le panier change → la vente précédemment enregistrée n'est plus à jour.
     setSaved(null);
     setPayLink('');
     setTpeStatus('');
   };
 
-  const removeLine = (sku: string) => {
-    setCart((c) => c.filter((l) => l.sku !== sku));
-    setSaved(null);
-    setPayLink('');
-    setTpeStatus('');
+  const add = (p: Product) => {
+    setCart((c) => {
+      const i = c.findIndex((l) => l.uid === p.id);
+      if (i >= 0) {
+        const copy = [...c];
+        copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
+        return copy;
+      }
+      return [...c, { uid: p.id, id: p.id, sku: p.sku, name: p.name, unitHt: priceOf(p), qty: 1 }];
+    });
+    setQ('');
+    setResults([]);
+    dirty();
+  };
+
+  const [customName, setCustomName] = useState('');
+  const [customPrice, setCustomPrice] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+  const addCustom = () => {
+    const price = parseFloat(customPrice) || 0;
+    if (!customName.trim() || price <= 0) return setErr('Nom et prix de la pièce hors catalogue requis.');
+    setErr('');
+    setCart((c) => [...c, { uid: 'hc-' + Date.now(), sku: '', name: customName.trim(), unitHt: price, qty: 1 }]);
+    setCustomName('');
+    setCustomPrice('');
+    setShowCustom(false);
+    dirty();
+  };
+
+  const removeLine = (uid: string) => {
+    setCart((c) => c.filter((l) => l.uid !== uid));
+    dirty();
   };
 
   const subtotal = cart.reduce((s, l) => s + l.unitHt * l.qty, 0);
@@ -147,7 +165,7 @@ export function Pos() {
     if (saved) return saved;
     const items = cart.map((l) => ({
       title: l.name,
-      sku: l.sku,
+      sku: l.sku || undefined,
       priceCents: Math.round(l.unitHt * 100),
       qty: l.qty,
     }));
@@ -299,7 +317,10 @@ export function Pos() {
 
       {/* Produits */}
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Produit</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs uppercase tracking-editorial text-white/50">Produit</div>
+          <button className="text-azure text-xs" onClick={() => setShowCustom(!showCustom)}>+ Pièce hors catalogue</button>
+        </div>
         <input className="field" placeholder="Rechercher une référence (SKU ou nom)…" value={q} onChange={(e) => search(e.target.value)} />
         {results.length > 0 && (
           <div className="mt-2 border border-white/10 rounded divide-y divide-white/10">
@@ -311,6 +332,13 @@ export function Pos() {
             ))}
           </div>
         )}
+        {showCustom && (
+          <div className="mt-2 border border-white/10 rounded p-3 flex gap-2 items-end">
+            <input className="field flex-1" placeholder="Désignation (ex. Sur-mesure)" value={customName} onChange={(e) => setCustomName(e.target.value)} />
+            <input className="field w-28" type="number" step="0.01" placeholder={'Prix HT ' + sym} value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} />
+            <button className="btn" onClick={addCustom}>Ajouter</button>
+          </div>
+        )}
       </div>
 
       {/* Panier */}
@@ -318,12 +346,12 @@ export function Pos() {
         <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Panier</div>
         {cart.length === 0 && <p className="text-white/40 text-sm">Panier vide.</p>}
         {cart.map((l) => (
-          <div key={l.sku} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm">
+          <div key={l.uid} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm">
             <div className="flex-1">
-              <div className="font-mono text-azure text-xs">{l.sku}</div>
+              <div className="font-mono text-azure text-xs">{l.sku || 'HORS CATALOGUE'}</div>
               <div>{l.name}</div>
               {(() => {
-                const a = cartAvail?.lines.find((x) => x.sku === l.sku);
+                const a = l.sku ? cartAvail?.lines.find((x) => x.sku === l.sku) : null;
                 return a ? (
                   <div className={'text-[11px] ' + (a.path === 'blocked' ? 'text-red-400' : 'text-white/40')}>{availLabel(a)}</div>
                 ) : null;
@@ -332,7 +360,7 @@ export function Pos() {
             <div className="flex items-center gap-2">
               <span>×{l.qty}</span>
               <span className="w-20 text-right">{fmt(l.unitHt * l.qty)}</span>
-              <button className="text-red-400/70" onClick={() => removeLine(l.sku)}>✕</button>
+              <button className="text-red-400/70" onClick={() => removeLine(l.uid)}>✕</button>
             </div>
           </div>
         ))}

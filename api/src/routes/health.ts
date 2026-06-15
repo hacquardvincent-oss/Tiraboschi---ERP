@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getShopInfo } from '../services/shopify';
+import { config } from '../config';
 
 export const healthRouter = Router();
 
@@ -8,6 +9,15 @@ healthRouter.get('/health', (_req, res) => {
     status: 'ok',
     service: 'tiraboschi-erp-api',
     time: new Date().toISOString(),
+  });
+});
+
+// Connectivité pour les badges du header (config encaissement)
+healthRouter.get('/health/connectivity', (_req, res) => {
+  const markets = Object.keys(config.stripeWrite);
+  res.json({
+    stripe: markets.length > 0,
+    terminal: markets.some((m) => !!config.stripeWrite[m].terminalLocation),
   });
 });
 
