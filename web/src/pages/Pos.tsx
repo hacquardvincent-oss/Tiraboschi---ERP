@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNav } from '../nav';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
 import { chargeOnReader } from '../lib/terminal';
@@ -75,11 +76,18 @@ export function Pos() {
   const [taxQuote, setTaxQuote] = useState<{ totalTaxCents: number; currency: string; lines: { title: string; rate: number; amountCents: number }[] } | null>(null);
   const [taxBusy, setTaxBusy] = useState(false);
 
+  const { posCustomer, setPosCustomer } = useNav();
   useEffect(() => {
     // Frais de port DDP par défaut depuis le paramètre Admin.
     api<{ value: string | null }>('/api/settings/globalShippingUsd')
       .then((s) => { if (s.value) setShipping(s.value); })
       .catch(() => {});
+    // Client transmis depuis le CRM (« Choisir »).
+    if (posCustomer) {
+      setCustomer((c) => ({ ...c, ...Object.fromEntries(Object.entries(posCustomer).filter(([, v]) => v != null)) }));
+      setPosCustomer(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

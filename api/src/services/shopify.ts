@@ -486,6 +486,18 @@ export async function createCustomer(input: CustomerCreateInput): Promise<unknow
   );
 }
 
+export async function updateCustomer(input: CustomerCreateInput & { id: string }): Promise<unknown> {
+  return shopifyGraphQL(
+    `mutation($input: CustomerInput!) {
+      customerUpdate(input: $input) {
+        customer { id firstName lastName email phone note }
+        userErrors { field message }
+      }
+    }`,
+    { input },
+  );
+}
+
 interface RecentOrdersResult {
   orders: {
     nodes: {

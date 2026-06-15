@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { searchCustomers, getCustomerDetail, createCustomer } from '../services/shopify';
+import { searchCustomers, getCustomerDetail, createCustomer, updateCustomer } from '../services/shopify';
 
 export const crmRouter = Router();
 crmRouter.use(requireAuth);
@@ -33,6 +33,17 @@ crmRouter.post('/customer', async (req, res) => {
   if (!email && !lastName) return res.status(400).json({ error: 'Email ou nom requis.' });
   try {
     res.status(201).json(await createCustomer({ firstName, lastName, email, phone, note }));
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
+/** Modification d'un client existant. */
+crmRouter.put('/customer', async (req, res) => {
+  const { id, firstName, lastName, email, phone, note } = req.body ?? {};
+  if (!id) return res.status(400).json({ error: 'id requis.' });
+  try {
+    res.json(await updateCustomer({ id, firstName, lastName, email, phone, note }));
   } catch (e) {
     res.status(502).json({ error: (e as Error).message });
   }

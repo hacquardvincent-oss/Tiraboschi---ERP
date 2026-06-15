@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
+import { NavContext, type PosCustomer } from '../nav';
 import { Inventaire } from '../pages/Inventaire';
 import { Collection } from '../pages/Collection';
 import { Admin } from '../pages/Admin';
@@ -31,13 +32,16 @@ function Page({ section }: { section: Section }) {
 
 export function Shell() {
   const [section, setSection] = useState<Section>('dashboard');
+  const [posCustomer, setPosCustomer] = useState<PosCustomer | null>(null);
   return (
-    <div className="min-h-full flex flex-col">
-      <Header />
-      <main className="flex-1 p-4 pb-24 max-w-3xl w-full mx-auto">
-        <Page section={section} />
-      </main>
-      <BottomNav active={section} onSelect={setSection} />
-    </div>
+    <NavContext.Provider value={{ goTo: setSection, posCustomer, setPosCustomer }}>
+      <div className="min-h-full flex flex-col">
+        <Header />
+        <main className="flex-1 p-4 pb-24 max-w-3xl w-full mx-auto">
+          <Page section={section} />
+        </main>
+        <BottomNav active={section} onSelect={setSection} />
+      </div>
+    </NavContext.Provider>
   );
 }

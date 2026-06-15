@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
+import { useNav } from '../nav';
+
+const COUNTRY_CODE: Record<string, string> = { france: 'FR', 'united states': 'US', 'états-unis': 'US', 'royaume-uni': 'GB', 'united kingdom': 'GB', italie: 'IT', italy: 'IT' };
 
 interface Money {
   amount: string;
@@ -33,8 +36,39 @@ export function Crm() {
   const [results, setResults] = useState<Customer[]>([]);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', note: '' });
+  const [editing, setEditing] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const { goTo, setPosCustomer } = useNav();
+
+  function choose(c: Customer) {
+    const a = c.defaultAddress;
+    setPosCustomer({
+      firstName: c.firstName ?? undefined,
+      lastName: c.lastName ?? undefined,
+      email: c.email ?? undefined,
+      phone: c.phone ?? undefined,
+      address1: a?.address1 ?? undefined,
+      city: a?.city ?? undefined,
+      zip: a?.zip ?? undefined,
+      province: a?.province ?? undefined,
+      country: a?.country ? COUNTRY_CODE[a.country.toLowerCase()] ?? undefined : undefined,
+      note: c.note ?? undefined,
+    });
+    goTo('pos');
+  }
+
+  async function saveEdit() {
+    if (!selected) return;
+    setErr('');
+    try {
+      await api('/api/crm/customer', { method: 'PUT', body: { id: selected.id, ...form } });
+      setEditing(false);
+      open(selected);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
 
   async function search(query: string) {
     setQ(query);
@@ -95,11 +129,33 @@ export function Crm() {
     if (!a || !a.address1) missing.push('adresse');
     return (
       <div className="card">
-        <button className="text-white/50 text-sm mb-3" onClick={() => setSelected(null)}>
+        <button className="text-white/50 text-sm mb-3" onClick={() => { setSelected(null); setEditing(false); }}>
           ← Résultats
         </button>
-        <h2 className="text-base">{fullName(selected)}</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base">{fullName(selected)}</h2>
+          <div className="flex gap-3 text-sm">
+            <button className="text-azure" onClick={() => { setForm({ firstName: selected.firstName ?? '', lastName: selected.lastName ?? '', email: selected.email ?? '', phone: selected.phone ?? '', note: selected.note ?? '' }); setEditing(!editing); }}>Modifier</button>
+            <button className="btn py-1" onClick={() => choose(selected)}>Choisir →</button>
+          </div>
+        </div>
         <div className="text-white/60 text-sm mb-3">{selected.email || '—'} · {selected.phone || '—'}</div>
+
+        {editing && (
+          <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <input className="field" placeholder="Prénom" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+              <input className="field" placeholder="Nom" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+              <input className="field" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input className="field" placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <input className="field" placeholder="Notes" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            <div className="flex gap-2">
+              <button className="btn flex-1" onClick={saveEdit}>Enregistrer</button>
+              <button className="text-white/50 text-sm px-3" onClick={() => setEditing(false)}>Annuler</button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3 text-sm mb-3">
           <Info label="Commandes" value={selected.numberOfOrders ?? '0'} />
@@ -164,15 +220,16 @@ export function Crm() {
       {!q.trim() && <p className="text-white/40 text-sm mt-2">Saisis une recherche pour afficher des clients.</p>}
       <div className="divide-y divide-white/10">
         {results.map((c) => (
-          <button key={c.id} className="w-full text-left py-2 hover:bg-white/5 flex justify-between" onClick={() => open(c)}>
-            <span>
+          <div key={c.id} className="py-2 flex items-center justify-between gap-2">
+            <button className="text-left flex-1 hover:opacity-80" onClick={() => open(c)}>
               <span className="block">{fullName(c)}</span>
-              <span className="text-white/50 text-xs">{c.email || '—'}</span>
-            </span>
-            <span className="text-white/50 text-xs text-right">
-              {c.numberOfOrders ?? '0'} cmd · {money(c.amountSpent)}
-            </span>
-          </button>
+              <span className="text-white/50 text-xs">{c.email || '—'} · {c.numberOfOrders ?? '0'} cmd · {money(c.amountSpent)}</span>
+            </button>
+            <div className="flex gap-2 text-xs">
+              <button className="text-azure" onClick={() => open(c)}>Modifier</button>
+              <button className="px-2 py-1 rounded border border-azure text-azure" onClick={() => choose(c)}>Choisir</button>
+            </div>
+          </div>
         ))}
       </div>
     </div>
