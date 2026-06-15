@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
-import { Placeholder } from '../pages/Placeholder';
 import { Inventaire } from '../pages/Inventaire';
 import { Collection } from '../pages/Collection';
 import { Admin } from '../pages/Admin';
 import { Pos } from '../pages/Pos';
 import { Crm } from '../pages/Crm';
 import { Sales } from '../pages/Sales';
+import { Dashboard } from '../pages/Dashboard';
 import type { Section } from '../sections';
 
 function Page({ section }: { section: Section }) {
@@ -23,7 +23,7 @@ function Page({ section }: { section: Section }) {
     case 'crm':
       return <Crm />;
     case 'dashboard':
-      return <Placeholder titleKey="nav.dashboard" />;
+      return <Dashboard />;
     case 'sales':
       return <Sales />;
   }

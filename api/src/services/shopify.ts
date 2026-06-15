@@ -198,6 +198,90 @@ export async function createRecoveryOrder(input: RecoveryOrderInput): Promise<Or
   });
 }
 
+// ─── REPORTS (Dashboard KPIs) ────────────────────────────────────────────────
+
+export interface DashboardReports {
+  currency: string;
+  daily: number;
+  weekly: number;
+  monthly: number;
+  orderCount: number;
+  crmCount: number | null;
+  recent: { name: string; createdAt: string; customer: string | null; amount: number; currency: string; status: string }[];
+}
+
+interface ReportsRawResult {
+  shop: { currencyCode: string };
+  orders: {
+    nodes: {
+      name: string;
+      createdAt: string;
+      displayFinancialStatus: string;
+      customer: { displayName: string } | null;
+      totalPriceSet: { presentmentMoney: { amount: string; currencyCode: string } };
+    }[];
+  };
+}
+
+/** KPIs Dashboard : CA jour / semaine / mois + dernières ventes (commandes Shopify ~31 j). */
+export async function getReports(): Promise<DashboardReports> {
+  const since = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const data = await shopifyGraphQL<ReportsRawResult>(
+    `query Reports($q: String!) {
+      shop { currencyCode }
+      orders(first: 250, query: $q, sortKey: CREATED_AT, reverse: true) {
+        nodes {
+          name createdAt displayFinancialStatus
+          customer { displayName }
+          totalPriceSet { presentmentMoney { amount currencyCode } }
+        }
+      }
+    }`,
+    { q: `created_at:>=${since}` },
+  );
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfWeek = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  let daily = 0;
+  let weekly = 0;
+  let monthly = 0;
+  for (const o of data.orders.nodes) {
+    if (o.displayFinancialStatus === 'REFUNDED' || o.displayFinancialStatus === 'VOIDED') continue;
+    const t = new Date(o.createdAt).getTime();
+    const amt = parseFloat(o.totalPriceSet.presentmentMoney.amount) || 0;
+    if (t >= startOfDay) daily += amt;
+    if (t >= startOfWeek) weekly += amt;
+    if (t >= startOfMonth) monthly += amt;
+  }
+
+  let crmCount: number | null = null;
+  try {
+    const c = await shopifyGraphQL<{ customersCount: { count: number } }>(`{ customersCount { count } }`);
+    crmCount = c.customersCount.count;
+  } catch {
+    crmCount = null; // champ indisponible selon la version d'API — non bloquant
+  }
+
+  return {
+    currency: data.shop.currencyCode,
+    daily,
+    weekly,
+    monthly,
+    orderCount: data.orders.nodes.length,
+    crmCount,
+    recent: data.orders.nodes.slice(0, 5).map((o) => ({
+      name: o.name,
+      createdAt: o.createdAt,
+      customer: o.customer?.displayName ?? null,
+      amount: parseFloat(o.totalPriceSet.presentmentMoney.amount) || 0,
+      currency: o.totalPriceSet.presentmentMoney.currencyCode,
+      status: o.displayFinancialStatus,
+    })),
+  };
+}
+
 // ─── CRM (clients Shopify) ──────────────────────────────────────────────────
 export async function searchCustomers(q: string): Promise<unknown> {
   return shopifyGraphQL(
