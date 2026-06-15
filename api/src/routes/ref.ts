@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth, requireRole } from '../middleware/auth';
-import { importRefCsv } from '../services/import';
+import { importRefCsv, importRefMultiCsv } from '../services/import';
 
 export const refRouter = Router();
 refRouter.use(requireAuth);
@@ -12,6 +12,17 @@ refRouter.post('/import', requireRole('ADMIN'), async (req, res) => {
   if (!category || typeof csv !== 'string') return res.status(400).json({ error: 'category et csv requis.' });
   try {
     res.json(await importRefCsv(category, csv));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+// Import multi-catégories (1 colonne = 1 catégorie) — Admin
+refRouter.post('/import-multi', requireRole('ADMIN'), async (req, res) => {
+  const { csv } = req.body ?? {};
+  if (typeof csv !== 'string' || !csv.trim()) return res.status(400).json({ error: 'csv requis.' });
+  try {
+    res.json(await importRefMultiCsv(csv));
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }

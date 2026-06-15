@@ -91,6 +91,7 @@ function RefAdmin() {
   const [showImport, setShowImport] = useState(false);
   const [impCat, setImpCat] = useState('');
   const [impCsv, setImpCsv] = useState('');
+  const [impMulti, setImpMulti] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
 
@@ -135,18 +136,20 @@ function RefAdmin() {
   async function runImport() {
     setErr('');
     setMsg('');
-    const category = (impCat || cat).trim();
-    if (!category || !impCsv.trim()) return setErr('Catégorie et CSV requis.');
+    if (!impCsv.trim()) return setErr('CSV requis.');
     try {
-      const r = await api<{ created: number; updated: number; skipped: number }>('/api/ref/import', {
-        method: 'POST',
-        body: { category, csv: impCsv },
-      });
+      let r: { created: number; updated: number; skipped: number };
+      if (impMulti) {
+        r = await api('/api/ref/import-multi', { method: 'POST', body: { csv: impCsv } });
+      } else {
+        const category = (impCat || cat).trim();
+        if (!category) return setErr('Catégorie requise.');
+        r = await api('/api/ref/import', { method: 'POST', body: { category, csv: impCsv } });
+      }
       setMsg(`${r.created} créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s).`);
       setImpCsv('');
       const c = await api<string[]>('/api/ref/categories');
       setCats(c);
-      setCat(category);
       reload();
     } catch (e) {
       setErr((e as Error).message);
@@ -184,8 +187,12 @@ function RefAdmin() {
 
       {showImport && (
         <div className="border border-white/10 rounded p-3 mb-4 space-y-2">
-          <div className="text-xs text-white/50">Import d'une liste (colonnes reconnues : <span className="font-mono">code</span> et/ou <span className="font-mono">label</span> ; code = libellé si absent)</div>
-          <input className="field" placeholder="Catégorie (ex. ateliers, suppliers, animalTypes…)" value={impCat || cat} onChange={(e) => setImpCat(e.target.value)} />
+          <label className="flex items-center gap-2 text-xs text-white/70">
+            <input type="checkbox" checked={impMulti} onChange={(e) => setImpMulti(e.target.checked)} />
+            Multi-catégories (1 colonne = 1 catégorie ; en-tête = nom de catégorie)
+          </label>
+          <div className="text-xs text-white/50">{impMulti ? 'Chaque colonne devient une liste (valeurs = entrées).' : 'Une catégorie ; colonnes reconnues : code et/ou label (code = libellé si absent).'}</div>
+          {!impMulti && <input className="field" placeholder="Catégorie (ex. ateliers, suppliers, animalTypes…)" value={impCat || cat} onChange={(e) => setImpCat(e.target.value)} />}
           <input type="file" accept=".csv,text/csv" className="text-xs" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(setImpCsv); }} />
           <textarea className="field font-mono text-[11px]" rows={3} placeholder="code;label  (ou label seul)" value={impCsv} onChange={(e) => setImpCsv(e.target.value)} />
           <button className="btn" onClick={runImport}>Importer</button>

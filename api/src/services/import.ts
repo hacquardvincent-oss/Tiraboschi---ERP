@@ -226,6 +226,38 @@ export async function importMaterialsCsv(text: string): Promise<ImportResult> {
 }
 
 /**
+ * Import multi-catégories du référentiel : chaque COLONNE du CSV est une catégorie
+ * (en-tête = nom de catégorie), chaque valeur non vide devient une entrée (code = libellé).
+ * Idempotent. Pratique pour charger toutes les listes (BDD_APP) en un seul import.
+ */
+export async function importRefMultiCsv(text: string): Promise<ImportResult> {
+  const rows = parseCsv(text);
+  const res: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+  if (rows.length === 0) return res;
+  const categories = Object.keys(rows[0]);
+  for (const category of categories) {
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const val = (row[category] ?? '').trim();
+      if (!val || seen.has(val)) continue;
+      seen.add(val);
+      try {
+        const existing = await prisma.refItem.findUnique({ where: { category_code: { category, code: val } } });
+        await prisma.refItem.upsert({
+          where: { category_code: { category, code: val } },
+          create: { category, code: val, label: val },
+          update: { label: val },
+        });
+        existing ? res.updated++ : res.created++;
+      } catch (e) {
+        res.errors.push(`${category}/${val}: ${(e as Error).message}`);
+      }
+    }
+  }
+  return res;
+}
+
+/**
  * Import descriptif des fiches techniques (FICHES, feuille RESUME) → texte de référence
  * par modèle, stocké dans Product.bom.techSheet (lisible dans la fiche PLM, non relié au stock).
  * Rattache le modèle aux produits via le référentiel models (label → code) ou le nom.
