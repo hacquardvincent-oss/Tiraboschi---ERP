@@ -50,6 +50,22 @@ interface BomLineForm {
 }
 const BOM_ROLES = ['principale', 'secondaire', 'tertiaire', 'doublure', 'bijouterie'];
 
+interface Avail {
+  productId: string;
+  sku: string;
+  name: string;
+  inStock: number;
+  buildableNow: number;
+  path: 'stock' | 'production' | 'blocked';
+  readyDate: string | null;
+  leadDays: number;
+  workshop: { id: string; name: string } | null;
+  materialShort: { code: string; name: string; need: number; stock: number; unit: string }[];
+  note?: string;
+}
+const fmtDate = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+
 const EMPTY = {
   name: '',
   status: 'DRAFT' as 'DRAFT' | 'VALIDATED',
@@ -99,6 +115,8 @@ export function Collection() {
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
   const [saving, setSaving] = useState(false);
+  const [listMode, setListMode] = useState<'edit' | 'avail'>('edit');
+  const [catalog, setCatalog] = useState<Avail[] | null>(null);
 
   const load = (query = '') =>
     api<Product[]>('/api/products' + (query ? '?q=' + encodeURIComponent(query) : ''))
@@ -113,6 +131,14 @@ export function Collection() {
   useEffect(() => {
     api<MaterialOpt[]>('/api/erp/materials').then(setMaterials).catch(() => setMaterials([]));
   }, []);
+
+  useEffect(() => {
+    if (view === 'list' && listMode === 'avail') {
+      setCatalog(null);
+      api<Avail[]>('/api/catalog').then(setCatalog).catch((e) => setErr((e as Error).message));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, listMode]);
 
   const set = (k: keyof Form) => (v: string) => setForm((f) => ({ ...f, [k]: v } as Form));
   const setInput =
@@ -237,22 +263,32 @@ export function Collection() {
         <button className="btn" onClick={newSheet}>+ Nouveau modèle</button>
       </div>
       <div className="text-xs text-white/40 mb-3">{validated} modèle(s) validé(s) · {products.length} déclinaison(s)</div>
-      <input
-        className="field mb-3"
-        placeholder="Rechercher (SKU ou nom)…"
-        value={q}
-        onChange={(e) => {
-          setQ(e.target.value);
-          load(e.target.value);
-        }}
-      />
+
+      <div className="flex gap-2 mb-3 text-sm">
+        <button className={'px-3 py-1 rounded border ' + (listMode === 'edit' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setListMode('edit')}>Édition</button>
+        <button className={'px-3 py-1 rounded border ' + (listMode === 'avail' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setListMode('avail')}>Catalogue & délais</button>
+      </div>
+
+      {listMode === 'edit' && (
+        <input
+          className="field mb-3"
+          placeholder="Rechercher (SKU ou nom)…"
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            load(e.target.value);
+          }}
+        />
+      )}
       {err && <p className="text-red-400 text-sm">{err}</p>}
 
-      {Object.keys(tree).length === 0 && (
+      {listMode === 'avail' && <CatalogAvail catalog={catalog} />}
+
+      {listMode === 'edit' && Object.keys(tree).length === 0 && (
         <p className="py-3 text-white/40 text-sm">Aucune fiche. Crée-en une avec « + Nouveau modèle ».</p>
       )}
 
-      {Object.entries(tree).map(([model, mats]) => {
+      {listMode === 'edit' && Object.entries(tree).map(([model, mats]) => {
         const isCollapsed = collapsed[model];
         const count = Object.values(mats).flatMap((o) => Object.values(o)).flat().length;
         return (
@@ -446,6 +482,39 @@ export function Collection() {
   function updJew(i: number, patch: Partial<BomJewelry>) {
     setBom((b) => ({ ...b, jewelry: b.jewelry.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
   }
+}
+
+function CatalogAvail({ catalog }: { catalog: Avail[] | null }) {
+  if (!catalog) return <p className="text-white/40 text-sm">Calcul des disponibilités…</p>;
+  if (catalog.length === 0) return <p className="text-white/40 text-sm">Aucun produit au catalogue.</p>;
+  return (
+    <div className="space-y-1">
+      {catalog.map((a) => {
+        const color = a.path === 'stock' ? 'text-green-300' : a.path === 'production' ? 'text-azure' : 'text-red-400';
+        const label =
+          a.path === 'stock'
+            ? `En stock (${a.inStock}) · livrable ~${fmtDate(a.readyDate)}`
+            : a.path === 'production'
+            ? `Sur commande · ~${a.leadDays} j → ~${fmtDate(a.readyDate)}${a.workshop ? ' · ' + a.workshop.name : ''}`
+            : `⚠ ${a.note ?? 'indisponible'}`;
+        return (
+          <div key={a.productId} className="py-1.5 border-b border-white/10">
+            <div className="flex items-center justify-between text-sm">
+              <div>
+                <span className="font-mono text-azure text-xs">{a.sku}</span> <span>{a.name}</span>
+              </div>
+              <span className={'text-xs ' + color}>{label}</span>
+            </div>
+            {a.materialShort.length > 0 && (
+              <div className="text-[11px] text-amber-400/80">
+                Matière à réappro : {a.materialShort.map((m) => `${m.code} (${m.stock}/${m.need} ${m.unit})`).join(', ')}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: 'DRAFT' | 'VALIDATED' }) {

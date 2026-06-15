@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
 import { chargeOnReader } from '../lib/terminal';
@@ -12,10 +12,19 @@ interface Product {
 }
 
 interface CartLine {
+  id: string;
   sku: string;
   name: string;
   unitHt: number; // prix HT unitaire dans la devise courante
   qty: number;
+}
+
+interface CartAvailLine {
+  sku: string;
+  path: 'stock' | 'production' | 'blocked';
+  inStock: number;
+  readyDate: string | null;
+  note?: string;
 }
 
 interface SavedSale {
@@ -58,6 +67,18 @@ export function Pos() {
   const [payLink, setPayLink] = useState('');
   const [tpeStatus, setTpeStatus] = useState('');
 
+  const [cartAvail, setCartAvail] = useState<{ readyDate: string | null; lines: CartAvailLine[] } | null>(null);
+
+  useEffect(() => {
+    if (cart.length === 0) return setCartAvail(null);
+    api<{ readyDate: string | null; lines: CartAvailLine[] }>('/api/catalog/availability', {
+      method: 'POST',
+      body: { items: cart.map((l) => ({ id: l.id, qty: l.qty })) },
+    })
+      .then(setCartAvail)
+      .catch(() => setCartAvail(null));
+  }, [cart]);
+
   const search = async (query: string) => {
     setQ(query);
     if (query.length < 1) return setResults([]);
@@ -79,7 +100,7 @@ export function Pos() {
         copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
         return copy;
       }
-      return [...c, { sku: p.sku, name: p.name, unitHt: priceOf(p), qty: 1 }];
+      return [...c, { id: p.id, sku: p.sku, name: p.name, unitHt: priceOf(p), qty: 1 }];
     });
     setQ('');
     setResults([]);
@@ -105,6 +126,13 @@ export function Pos() {
 
   const sym = currency === 'EUR' ? '€' : '$';
   const fmt = (n: number) => n.toFixed(2) + ' ' + sym;
+  const fmtDate = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+  const availLabel = (a: CartAvailLine) => {
+    if (a.path === 'stock') return `En stock (${a.inStock}) · livrable ~${fmtDate(a.readyDate)}`;
+    if (a.path === 'production') return `Sur commande · livrable ~${fmtDate(a.readyDate)}`;
+    return `⚠ ${a.note ?? 'indisponible'}`;
+  };
 
   /** Validation minimale : email (reçu) ; adresse complète si expédition DDP. */
   function validate(): string | null {
@@ -294,6 +322,12 @@ export function Pos() {
             <div className="flex-1">
               <div className="font-mono text-azure text-xs">{l.sku}</div>
               <div>{l.name}</div>
+              {(() => {
+                const a = cartAvail?.lines.find((x) => x.sku === l.sku);
+                return a ? (
+                  <div className={'text-[11px] ' + (a.path === 'blocked' ? 'text-red-400' : 'text-white/40')}>{availLabel(a)}</div>
+                ) : null;
+              })()}
             </div>
             <div className="flex items-center gap-2">
               <span>×{l.qty}</span>
@@ -327,6 +361,14 @@ export function Pos() {
             <span>Total {currency === 'EUR' ? 'TTC' : 'taxes comprises'}</span>
             <span>{fmt(total)}</span>
           </div>
+          {cartAvail && cart.length > 0 && (
+            <div className="flex justify-between text-xs pt-1">
+              <span className="text-white/50">Livraison estimée au client</span>
+              <span className={cartAvail.readyDate ? 'text-white/80' : 'text-red-400'}>
+                {cartAvail.readyDate ? '~' + fmtDate(cartAvail.readyDate) : 'à confirmer (voir lignes)'}
+              </span>
+            </div>
+          )}
           {currency === 'USD' && (
             <p className="text-white/40 text-[11px]">
               Taxe estimée pour l'affichage. La taxe exacte par destination sera calculée par Shopify à l'encaissement.
