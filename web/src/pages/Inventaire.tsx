@@ -46,6 +46,26 @@ interface ProductionOrder {
   clientOrderRef?: string | null;
   workshop?: { name: string } | null;
 }
+interface PickingLine {
+  materialId: string;
+  code: string;
+  name: string;
+  role: string;
+  unit: string;
+  perPiece: number;
+  need: number;
+  stock: number;
+  short: boolean;
+}
+interface FulfillTask {
+  id: string;
+  shopifyOrderRef: string;
+  status: 'TO_PREPARE' | 'READY' | 'SHIPPED';
+  serial?: { serial: string; variantSku: string } | null;
+}
+const FULFILL_NEXT: Record<string, string> = { TO_PREPARE: 'READY', READY: 'SHIPPED' };
+const FULFILL_FR: Record<string, string> = { TO_PREPARE: 'À préparer', READY: 'Prête', SHIPPED: 'Expédiée' };
+
 interface PieceReceipt {
   id: string;
   reference: string;
@@ -290,39 +310,129 @@ function ProductionTab({ onErr }: { onErr: (s: string) => void }) {
     }
   }
 
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [picking, setPicking] = useState<PickingLine[] | null>(null);
+  const [tasks, setTasks] = useState<FulfillTask[]>([]);
+
+  const reloadTasks = () => api<FulfillTask[]>('/api/erp/fulfillment-tasks').then(setTasks).catch(() => {});
+  useEffect(() => {
+    reloadTasks();
+  }, []);
+
+  async function toggle(id: string) {
+    if (openId === id) return setOpenId(null);
+    setOpenId(id);
+    setPicking(null);
+    try {
+      const d = await api<{ lines: PickingLine[] }>(`/api/erp/production-orders/${id}/picking`);
+      setPicking(d.lines);
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  async function issue(id: string) {
+    try {
+      await api(`/api/erp/production-orders/${id}/issue-materials`, { method: 'POST', body: {} });
+      reload();
+      const d = await api<{ lines: PickingLine[] }>(`/api/erp/production-orders/${id}/picking`);
+      setPicking(d.lines);
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  async function receive(id: string) {
+    try {
+      const r = await api<{ serials: number }>(`/api/erp/production-orders/${id}/receive`, { method: 'POST', body: {} });
+      onErr(`${r.serials} pièce(s) réceptionnée(s) avec n° de série.`);
+      reload();
+      reloadTasks();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  async function advanceTask(t: FulfillTask) {
+    const next = FULFILL_NEXT[t.status];
+    if (!next) return;
+    try {
+      await api('/api/erp/fulfillment-tasks/' + t.id, { method: 'PATCH', body: { status: next } });
+      reloadTasks();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-xs uppercase tracking-editorial text-white/50">Ordres de production</div>
-        <button className="btn" onClick={() => setAdding(!adding)}>+ Ordre</button>
+    <>
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs uppercase tracking-editorial text-white/50">Ordres de production</div>
+          <button className="btn" onClick={() => setAdding(!adding)}>+ Ordre</button>
+        </div>
+        {adding && (
+          <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
+            <select className="field" value={f.workshopId} onChange={(e) => setF({ ...f, workshopId: e.target.value })}>
+              <option value="">— Atelier —</option>
+              {workshops.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            <input className="field" placeholder="SKU variante" value={f.variantSku} onChange={(e) => setF({ ...f, variantSku: e.target.value })} />
+            <div className="flex gap-2">
+              <input className="field w-24" type="number" placeholder="Qté" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
+              <input className="field flex-1" placeholder="Réf. commande client (option)" value={f.clientOrderRef} onChange={(e) => setF({ ...f, clientOrderRef: e.target.value })} />
+            </div>
+            <button className="btn w-full" onClick={create}>Créer l'ordre</button>
+          </div>
+        )}
+        {orders.length === 0 && <p className="text-white/40 text-sm">Aucun ordre de production.</p>}
+        {orders.map((o) => (
+          <div key={o.id} className="py-1.5 border-b border-white/10">
+            <div className="flex items-center justify-between text-sm">
+              <button className="text-left" onClick={() => toggle(o.id)}>
+                <div className="font-mono text-xs text-azure">{o.reference} {openId === o.id ? '▾' : '▸'}</div>
+                <div className="text-white/50 text-xs">{o.workshop?.name ?? '—'} · {o.variantSku} ×{o.quantity}{o.clientOrderRef ? ' · ' + o.clientOrderRef : ''}</div>
+              </button>
+              <select className="field w-40" value={o.status} onChange={(e) => setStatus(o.id, e.target.value)}>
+                {PROD_STATUS.map((st) => <option key={st} value={st}>{PROD_STATUS_FR[st]}</option>)}
+              </select>
+            </div>
+            {openId === o.id && (
+              <div className="mt-2 ml-1 border-l border-white/10 pl-3">
+                <div className="text-[11px] uppercase tracking-editorial text-white/40 mb-1">Liste de prélèvement matières</div>
+                {!picking && <p className="text-white/30 text-xs">Calcul…</p>}
+                {picking && picking.length === 0 && <p className="text-white/30 text-xs">Aucune nomenclature chiffrée pour ce SKU.</p>}
+                {picking?.map((l) => (
+                  <div key={l.materialId} className="flex justify-between text-xs py-0.5">
+                    <span>{l.code} — {l.name} <span className="text-white/30">({l.role})</span></span>
+                    <span className={l.short ? 'text-red-400' : 'text-white/60'}>{l.need} {l.unit} (stock {l.stock})</span>
+                  </div>
+                ))}
+                <div className="flex gap-2 mt-2">
+                  <button className="btn flex-1" onClick={() => issue(o.id)}>Sortir matières → atelier</button>
+                  <button className="btn flex-1" onClick={() => receive(o.id)}>Réceptionner (n° série)</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-      {adding && (
-        <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
-          <select className="field" value={f.workshopId} onChange={(e) => setF({ ...f, workshopId: e.target.value })}>
-            <option value="">— Atelier —</option>
-            {workshops.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-          <input className="field" placeholder="SKU variante" value={f.variantSku} onChange={(e) => setF({ ...f, variantSku: e.target.value })} />
-          <div className="flex gap-2">
-            <input className="field w-24" type="number" placeholder="Qté" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
-            <input className="field flex-1" placeholder="Réf. commande client (option)" value={f.clientOrderRef} onChange={(e) => setF({ ...f, clientOrderRef: e.target.value })} />
+
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Commandes à préparer</div>
+        {tasks.filter((t) => t.status !== 'SHIPPED').length === 0 && <p className="text-white/40 text-sm">Rien à préparer.</p>}
+        {tasks.map((t) => (
+          <div key={t.id} className="flex items-center justify-between py-1.5 text-sm border-b border-white/10">
+            <div>
+              <div className="text-xs">{t.shopifyOrderRef}</div>
+              <div className="text-white/50 text-[11px]">{t.serial ? 'N° ' + t.serial.serial : 'en attente pièce'} · {FULFILL_FR[t.status]}</div>
+            </div>
+            {FULFILL_NEXT[t.status] && (
+              <button className="text-azure text-xs" onClick={() => advanceTask(t)}>
+                → {FULFILL_FR[FULFILL_NEXT[t.status]]}
+              </button>
+            )}
           </div>
-          <button className="btn w-full" onClick={create}>Créer l'ordre</button>
-        </div>
-      )}
-      {orders.length === 0 && <p className="text-white/40 text-sm">Aucun ordre de production.</p>}
-      {orders.map((o) => (
-        <div key={o.id} className="flex items-center justify-between py-1.5 text-sm border-b border-white/10">
-          <div>
-            <div className="font-mono text-xs text-azure">{o.reference}</div>
-            <div className="text-white/50 text-xs">{o.workshop?.name ?? '—'} · {o.variantSku} ×{o.quantity}</div>
-          </div>
-          <select className="field w-44" value={o.status} onChange={(e) => setStatus(o.id, e.target.value)}>
-            {PROD_STATUS.map((st) => <option key={st} value={st}>{PROD_STATUS_FR[st]}</option>)}
-          </select>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 

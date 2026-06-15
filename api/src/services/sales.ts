@@ -1,5 +1,6 @@
 import { prisma } from '../db/prisma';
 import { createRecoveryOrder } from './shopify';
+import { orchestrateSale } from './fulfillment';
 
 export interface SaleItem {
   title: string;
@@ -86,6 +87,7 @@ export async function markSalePaid(
     data: { status: 'PAID', paidAt: existing?.paidAt ?? new Date(), ...payment },
   });
   await syncSale(saleId).catch(() => {});
+  await orchestrateSale(saleId).catch(() => {});
   return prisma.sale.findUnique({ where: { id: saleId } });
 }
 

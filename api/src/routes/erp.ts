@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { assembleSku, deriveYearId, deriveSeasonId } from '../services/sku';
+import { pickingList, issueMaterials, receiveFinishedPieces } from '../services/fulfillment';
 
 export const erpRouter = Router();
 erpRouter.use(requireAuth);
@@ -237,6 +238,52 @@ erpRouter.patch('/production-orders/:id', async (req, res) => {
   const { status } = req.body ?? {};
   try {
     res.json(await prisma.productionOrder.update({ where: { id: req.params.id }, data: { status } }));
+  } catch (e) { fail(res, e); }
+});
+
+// Liste de prélèvement matières (nomenclature × quantité) d'un OP
+erpRouter.get('/production-orders/:id/picking', async (req, res) => {
+  const data = await pickingList(req.params.id);
+  if (!data) return res.status(404).json({ error: 'Ordre introuvable.' });
+  res.json(data);
+});
+
+// Sortie des matières vers l'atelier (consommation BOM) → MATERIALS_IN_TRANSIT
+erpRouter.post('/production-orders/:id/issue-materials', async (req, res) => {
+  try {
+    await issueMaterials(req.params.id, req.user?.sub);
+    res.json(await prisma.productionOrder.findUnique({ where: { id: req.params.id }, include: { workshop: true } }));
+  } catch (e) { fail(res, e); }
+});
+
+// Réception des pièces produites (bon de réception + n° de série) → RECEIVED
+erpRouter.post('/production-orders/:id/receive', async (req, res) => {
+  try {
+    const result = await receiveFinishedPieces(req.params.id, Number(req.body?.quantity) || undefined);
+    res.json(result);
+  } catch (e) { fail(res, e); }
+});
+
+// ─── Commandes à préparer (fulfillment) ───────────────────────────────────────
+erpRouter.get('/fulfillment-tasks', async (_req, res) => {
+  res.json(
+    await prisma.fulfillmentTask.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: { serial: true },
+    }),
+  );
+});
+
+erpRouter.patch('/fulfillment-tasks/:id', async (req, res) => {
+  const { status } = req.body ?? {};
+  try {
+    const task = await prisma.fulfillmentTask.update({ where: { id: req.params.id }, data: { status } });
+    // À l'expédition : la pièce sort du stock (statut SHIPPED)
+    if (status === 'SHIPPED' && task.serialId) {
+      await prisma.serial.update({ where: { id: task.serialId }, data: { status: 'SHIPPED', location: 'client' } });
+    }
+    res.json(task);
   } catch (e) { fail(res, e); }
 });
 
