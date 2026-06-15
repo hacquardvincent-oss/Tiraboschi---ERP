@@ -287,6 +287,71 @@ erpRouter.patch('/fulfillment-tasks/:id', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// ─── Planification MOQ (regroupement de la demande par atelier) ───────────────
+interface PlanGroup {
+  workshopId: string;
+  workshop: { id: string; name: string; moq: number | null };
+  totalQty: number;
+  orders: { id: string; reference: string; variantSku: string; quantity: number; clientOrderRef: string | null }[];
+}
+erpRouter.get('/planning', async (_req, res) => {
+  const orders = await prisma.productionOrder.findMany({ where: { status: 'REQUESTED' }, include: { workshop: true } });
+  const groups = new Map<string, PlanGroup>();
+  for (const o of orders) {
+    const g = groups.get(o.workshopId) ?? {
+      workshopId: o.workshopId,
+      workshop: { id: o.workshop.id, name: o.workshop.name, moq: o.workshop.moq },
+      totalQty: 0,
+      orders: [],
+    };
+    g.totalQty += o.quantity;
+    g.orders.push({ id: o.id, reference: o.reference, variantSku: o.variantSku, quantity: o.quantity, clientOrderRef: o.clientOrderRef });
+    groups.set(o.workshopId, g);
+  }
+  res.json(
+    [...groups.values()].map((g) => ({
+      ...g,
+      reached: g.workshop.moq == null || g.totalQty >= g.workshop.moq,
+    })),
+  );
+});
+
+// Lance un lot : sort les matières pour tous les OP en attente d'un atelier
+erpRouter.post('/planning/:workshopId/launch', async (req, res) => {
+  try {
+    const orders = await prisma.productionOrder.findMany({ where: { workshopId: req.params.workshopId, status: 'REQUESTED' } });
+    for (const o of orders) await issueMaterials(o.id, req.user?.sub).catch(() => {});
+    res.json({ launched: orders.length });
+  } catch (e) { fail(res, e); }
+});
+
+// ─── Suggestions de réapprovisionnement (stock sous le seuil) ─────────────────
+erpRouter.get('/reorder-suggestions', async (_req, res) => {
+  const [materials, sums] = await Promise.all([
+    prisma.material.findMany({ include: { supplier: true } }),
+    prisma.stockMovement.groupBy({ by: ['materialId'], _sum: { quantity: true } }),
+  ]);
+  const stockByMat = new Map(sums.map((s) => [s.materialId, Number(s._sum.quantity ?? 0)]));
+  const sugg = materials
+    .map((m) => {
+      const stock = stockByMat.get(m.id) ?? 0;
+      const threshold = m.reorderThreshold != null ? Number(m.reorderThreshold) : null;
+      if (threshold == null || stock > threshold) return null;
+      return {
+        id: m.id,
+        code: m.code,
+        name: m.name,
+        unit: m.unit,
+        stock,
+        threshold,
+        supplier: m.supplier?.name ?? null,
+        suggestedQty: Math.max(threshold * 2 - stock, threshold),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+  res.json(sugg);
+});
+
 // ─── Stock pièces finies (réceptions) ─────────────────────────────────────────
 erpRouter.get('/finished-pieces', async (_req, res) => {
   res.json(

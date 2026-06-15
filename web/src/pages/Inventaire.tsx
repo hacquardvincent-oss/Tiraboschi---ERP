@@ -74,7 +74,25 @@ interface PieceReceipt {
   productionOrder?: { variantSku: string; workshop?: { name: string } | null } | null;
 }
 
-type Tab = 'dashboard' | 'materials' | 'production' | 'pieces' | 'workshops';
+type Tab = 'dashboard' | 'materials' | 'production' | 'planning' | 'pieces' | 'workshops';
+
+interface PlanGroup {
+  workshopId: string;
+  workshop: { id: string; name: string; moq: number | null };
+  totalQty: number;
+  reached: boolean;
+  orders: { id: string; reference: string; variantSku: string; quantity: number; clientOrderRef: string | null }[];
+}
+interface ReorderSuggestion {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+  stock: number;
+  threshold: number;
+  supplier: string | null;
+  suggestedQty: number;
+}
 
 interface Capability {
   modelCode: string;
@@ -120,6 +138,7 @@ export function Inventaire() {
               ['dashboard', 'Tableau de bord'],
               ['materials', 'Stock matières'],
               ['production', 'Production'],
+              ['planning', 'Planification'],
               ['pieces', 'Stock pièces'],
               ['workshops', 'Ateliers'],
             ] as [Tab, string][]
@@ -143,6 +162,7 @@ export function Inventaire() {
       {tab === 'dashboard' && <DashboardTab onErr={setErr} />}
       {tab === 'materials' && <MaterialsTab onErr={setErr} />}
       {tab === 'production' && <ProductionTab onErr={setErr} />}
+      {tab === 'planning' && <PlanningTab onErr={setErr} />}
       {tab === 'pieces' && <PiecesTab onErr={setErr} />}
       {tab === 'workshops' && <WorkshopsTab onErr={setErr} />}
     </div>
@@ -429,6 +449,80 @@ function ProductionTab({ onErr }: { onErr: (s: string) => void }) {
                 → {FULFILL_FR[FULFILL_NEXT[t.status]]}
               </button>
             )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
+  const [plan, setPlan] = useState<PlanGroup[]>([]);
+  const [reorder, setReorder] = useState<ReorderSuggestion[]>([]);
+
+  const reload = () => {
+    api<PlanGroup[]>('/api/erp/planning').then(setPlan).catch((e) => onErr((e as Error).message));
+    api<ReorderSuggestion[]>('/api/erp/reorder-suggestions').then(setReorder).catch(() => {});
+  };
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function launch(workshopId: string) {
+    try {
+      const r = await api<{ launched: number }>(`/api/erp/planning/${workshopId}/launch`, { method: 'POST', body: {} });
+      onErr(`Lot lancé : ${r.launched} ordre(s) → matières sorties.`);
+      reload();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+
+  return (
+    <>
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Regroupement par atelier (MOQ)</div>
+        {plan.length === 0 && <p className="text-white/40 text-sm">Aucun ordre en attente de lancement.</p>}
+        {plan.map((g) => (
+          <div key={g.workshopId} className="border-b border-white/10 py-2">
+            <div className="flex items-center justify-between text-sm">
+              <div>
+                <div className="font-semibold">{g.workshop.name}</div>
+                <div className="text-white/50 text-xs">
+                  {g.totalQty} pièce(s) en attente · MOQ {g.workshop.moq ?? '—'}
+                  {g.workshop.moq != null && !g.reached && (
+                    <span className="text-amber-400"> · manque {g.workshop.moq - g.totalQty}</span>
+                  )}
+                </div>
+              </div>
+              <button
+                className={'px-3 py-1 rounded border text-xs ' + (g.reached ? 'border-azure text-azure' : 'border-white/20 text-white/40')}
+                onClick={() => launch(g.workshopId)}
+                title={g.reached ? 'Lancer le lot' : 'MOQ non atteint — lancement forcé possible'}
+              >
+                {g.reached ? 'Lancer le lot' : 'Forcer le lancement'}
+              </button>
+            </div>
+            <div className="ml-1 mt-1">
+              {g.orders.map((o) => (
+                <div key={o.id} className="text-[11px] text-white/40">{o.reference} · {o.variantSku} ×{o.quantity}{o.clientOrderRef ? ' · ' + o.clientOrderRef : ''}</div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Suggestions de réapprovisionnement</div>
+        {reorder.length === 0 && <p className="text-white/40 text-sm">Aucune matière sous le seuil.</p>}
+        {reorder.map((r) => (
+          <div key={r.id} className="flex items-center justify-between py-1.5 text-sm border-b border-white/10">
+            <div>
+              <div>{r.code} — {r.name}</div>
+              <div className="text-white/50 text-[11px]">Stock {r.stock} / seuil {r.threshold} {r.unit} · {r.supplier ?? 'fournisseur ?'}</div>
+            </div>
+            <span className="text-azure text-xs">commander ~{r.suggestedQty} {r.unit}</span>
           </div>
         ))}
       </div>
