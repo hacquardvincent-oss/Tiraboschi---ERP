@@ -34,6 +34,22 @@ interface Bom {
   jewelry: BomJewelry[];
 }
 
+interface MaterialOpt {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+  unitCost: string | null;
+  currency: string;
+}
+interface BomLineForm {
+  materialId: string;
+  role: string;
+  quantity: string;
+  unit: string;
+}
+const BOM_ROLES = ['principale', 'secondaire', 'tertiaire', 'doublure', 'bijouterie'];
+
 const EMPTY = {
   name: '',
   status: 'DRAFT' as 'DRAFT' | 'VALIDATED',
@@ -75,6 +91,8 @@ export function Collection() {
   const [q, setQ] = useState('');
   const [form, setForm] = useState<Form>(EMPTY);
   const [bom, setBom] = useState<Bom>(emptyBom());
+  const [materials, setMaterials] = useState<MaterialOpt[]>([]);
+  const [bomLines, setBomLines] = useState<BomLineForm[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [shopifyId, setShopifyId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -92,6 +110,10 @@ export function Collection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
+  useEffect(() => {
+    api<MaterialOpt[]>('/api/erp/materials').then(setMaterials).catch(() => setMaterials([]));
+  }, []);
+
   const set = (k: keyof Form) => (v: string) => setForm((f) => ({ ...f, [k]: v } as Form));
   const setInput =
     (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -100,6 +122,7 @@ export function Collection() {
   function newSheet() {
     setForm(EMPTY);
     setBom(emptyBom());
+    setBomLines([]);
     setEditingId(null);
     setShopifyId(null);
     setErr('');
@@ -121,6 +144,15 @@ export function Collection() {
       setForm(next as Form);
       const b = p.bom as Bom | null;
       setBom(b ? { options: b.options ?? [], materials: b.materials ?? [], jewelry: b.jewelry ?? [] } : emptyBom());
+      const lines = Array.isArray(p.bomLines)
+        ? (p.bomLines as Record<string, unknown>[]).map((l) => ({
+            materialId: String(l.materialId),
+            role: String(l.role ?? 'principale'),
+            quantity: String(l.quantity ?? ''),
+            unit: String(l.unit ?? 'piece'),
+          }))
+        : [];
+      setBomLines(lines);
       setEditingId(id);
       setShopifyId((p.shopifyProductId as string | null) ?? null);
       setView('form');
@@ -143,6 +175,7 @@ export function Collection() {
       const saved = editingId
         ? await api<{ id: string }>('/api/products/' + editingId, { method: 'PUT', body: body() })
         : await api<{ id: string }>('/api/products', { method: 'POST', body: body() });
+      await api('/api/products/' + saved.id + '/bom', { method: 'PUT', body: { lines: bomLines } });
       setEditingId(saved.id);
       setInfo('Fiche enregistrée.');
     } catch (e) {
@@ -264,6 +297,10 @@ export function Collection() {
   );
 
   function renderForm() {
+    const bomTotal = bomLines.reduce((s, l) => {
+      const mat = materials.find((m) => m.id === l.materialId);
+      return s + (mat?.unitCost && l.quantity ? Number(mat.unitCost) * Number(l.quantity) : 0);
+    }, 0);
     return (
       <div className="card">
         <div className="flex items-center justify-between mb-3">
@@ -308,27 +345,41 @@ export function Collection() {
           <F label="Type de peau"><RefSelect category="skinTypes" value={form.skinTypeCode} onChange={set('skinTypeCode')} /></F>
           <F label="Doublure"><RefSelect category="linings" value={form.liningCode} onChange={set('liningCode')} /></F>
           <F label="Fournisseur"><RefSelect category="suppliers" value={form.supplierCode} onChange={set('supplierCode')} /></F>
-          <div className="col-span-2 space-y-2">
-            {bom.materials.map((m, i) => (
-              <div key={i} className="border border-white/10 rounded p-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <select className="field w-40" value={m.role} onChange={(e) => updMat(i, { role: e.target.value })}>
-                    <option value="secondaire">Matière secondaire</option>
-                    <option value="tertiaire">Matière tertiaire</option>
-                    <option value="doublure">Doublure</option>
-                  </select>
-                  <button className="text-red-400/70" onClick={() => setBom((b) => ({ ...b, materials: b.materials.filter((_, j) => j !== i) }))}>✕</button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input className="field" placeholder="Animal" value={m.animal} onChange={(e) => updMat(i, { animal: e.target.value })} />
-                  <input className="field" placeholder="Type" value={m.type} onChange={(e) => updMat(i, { type: e.target.value })} />
-                  <input className="field" placeholder="Coloris" value={m.color} onChange={(e) => updMat(i, { color: e.target.value })} />
-                  <input className="field" placeholder="Quantité" value={m.qty} onChange={(e) => updMat(i, { qty: e.target.value })} />
-                  <input className="field col-span-2" placeholder="Fournisseur" value={m.supplier} onChange={(e) => updMat(i, { supplier: e.target.value })} />
-                </div>
-              </div>
-            ))}
-            <button className="text-azure text-sm" onClick={() => setBom((b) => ({ ...b, materials: [...b.materials, { role: 'secondaire', animal: '', type: '', color: '', qty: '', supplier: '', details: '' }] }))}>+ Ajouter une matière</button>
+          <div className="col-span-2">
+            <div className="text-[11px] text-white/40 mb-1">Nomenclature chiffrée (matières du stock) — consommation valorisée</div>
+            <div className="space-y-2">
+              {bomLines.map((l, i) => {
+                const mat = materials.find((m) => m.id === l.materialId);
+                const cost = mat?.unitCost && l.quantity ? Number(mat.unitCost) * Number(l.quantity) : null;
+                return (
+                  <div key={i} className="border border-white/10 rounded p-2 grid grid-cols-2 gap-2">
+                    <select className="field" value={l.role} onChange={(e) => updLine(i, { role: e.target.value })}>
+                      {BOM_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    <select
+                      className="field"
+                      value={l.materialId}
+                      onChange={(e) => {
+                        const m = materials.find((x) => x.id === e.target.value);
+                        updLine(i, { materialId: e.target.value, unit: l.unit && l.unit !== 'piece' ? l.unit : m?.unit ?? 'piece' });
+                      }}
+                    >
+                      <option value="">— Matière (stock) —</option>
+                      {materials.map((m) => <option key={m.id} value={m.id}>{m.code} — {m.name}</option>)}
+                    </select>
+                    <input className="field" type="number" step="0.001" placeholder="Quantité" value={l.quantity} onChange={(e) => updLine(i, { quantity: e.target.value })} />
+                    <div className="flex gap-2 items-center">
+                      <input className="field w-20" placeholder="unité" value={l.unit} onChange={(e) => updLine(i, { unit: e.target.value })} />
+                      <span className="flex-1 text-right text-xs text-white/40">{cost != null ? cost.toFixed(2) + ' ' + (mat?.currency ?? '') : ''}</span>
+                      <button className="text-red-400/70" onClick={() => setBomLines((ls) => ls.filter((_, j) => j !== i))}>✕</button>
+                    </div>
+                  </div>
+                );
+              })}
+              <button className="text-azure text-sm" onClick={() => setBomLines((ls) => [...ls, { materialId: '', role: 'principale', quantity: '', unit: 'piece' }])}>+ Ajouter une matière (stock)</button>
+              {materials.length === 0 && <p className="text-white/30 text-xs">Aucune matière en stock — ajoute-les dans OPS → Stock matières.</p>}
+              {bomTotal > 0 && <div className="text-right text-xs text-white/60">Coût matières estimé : {bomTotal.toFixed(2)} €</div>}
+            </div>
           </div>
         </Section>
 
@@ -389,8 +440,8 @@ export function Collection() {
     );
   }
 
-  function updMat(i: number, patch: Partial<BomMaterial>) {
-    setBom((b) => ({ ...b, materials: b.materials.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
+  function updLine(i: number, patch: Partial<BomLineForm>) {
+    setBomLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   }
   function updJew(i: number, patch: Partial<BomJewelry>) {
     setBom((b) => ({ ...b, jewelry: b.jewelry.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));

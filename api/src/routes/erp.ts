@@ -42,16 +42,70 @@ erpRouter.post('/suppliers', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-// ─── Ateliers de production ───────────────────────────────────────────────────
+// ─── Ateliers de production (capacité, délai, MOQ, compétences) ───────────────
+const intOrNull = (v: unknown) => (v === undefined || v === null || v === '' ? null : Math.trunc(Number(v)));
+
+function workshopData(b: Record<string, unknown>) {
+  return {
+    name: b.name as string,
+    contactEmail: (b.contactEmail as string) ?? null,
+    contactPhone: (b.contactPhone as string) ?? null,
+    notes: (b.notes as string) ?? null,
+    location: (b.location as string) ?? null,
+    leadTimeDays: intOrNull(b.leadTimeDays),
+    capacityPerMonth: intOrNull(b.capacityPerMonth),
+    moq: intOrNull(b.moq),
+    transitDays: intOrNull(b.transitDays),
+    shippingCost: b.shippingCost === '' || b.shippingCost === undefined ? null : b.shippingCost,
+  };
+}
+
 erpRouter.get('/workshops', async (_req, res) => {
-  res.json(await prisma.workshop.findMany({ orderBy: { name: 'asc' } }));
+  res.json(
+    await prisma.workshop.findMany({ orderBy: { name: 'asc' }, include: { capabilities: true } }),
+  );
 });
 erpRouter.post('/workshops', async (req, res) => {
-  const { name, contactEmail, contactPhone, notes } = req.body ?? {};
-  if (!name) return res.status(400).json({ error: 'name requis.' });
+  const b = req.body ?? {};
+  if (!b.name) return res.status(400).json({ error: 'name requis.' });
   try {
-    res.status(201).json(await prisma.workshop.create({ data: { name, contactEmail, contactPhone, notes } }));
+    res.status(201).json(await prisma.workshop.create({ data: workshopData(b) as never }));
   } catch (e) { fail(res, e); }
+});
+erpRouter.put('/workshops/:id', async (req, res) => {
+  const b = req.body ?? {};
+  if (!b.name) return res.status(400).json({ error: 'name requis.' });
+  try {
+    res.json(await prisma.workshop.update({ where: { id: req.params.id }, data: workshopData(b) as never }));
+  } catch (e) { fail(res, e); }
+});
+
+// Matrice de compétences : modèles qu'un atelier sait produire
+erpRouter.put('/workshops/:id/capabilities', async (req, res) => {
+  const body = req.body ?? {};
+  const lines: { modelCode: string; leadTimeDays?: number | null }[] = Array.isArray(body.capabilities)
+    ? body.capabilities
+    : [];
+  try {
+    await prisma.$transaction([
+      prisma.workshopCapability.deleteMany({ where: { workshopId: req.params.id } }),
+      prisma.workshopCapability.createMany({
+        data: lines
+          .filter((l) => l.modelCode)
+          .map((l) => ({ workshopId: req.params.id, modelCode: l.modelCode, leadTimeDays: intOrNull(l.leadTimeDays) })),
+      }),
+    ]);
+    res.json(await prisma.workshopCapability.findMany({ where: { workshopId: req.params.id } }));
+  } catch (e) { fail(res, e); }
+});
+
+// Ateliers capables de produire un modèle donné (pour le moteur ATP / lancement OP)
+erpRouter.get('/workshops/by-model/:modelCode', async (req, res) => {
+  const caps = await prisma.workshopCapability.findMany({
+    where: { modelCode: req.params.modelCode },
+    include: { workshop: true },
+  });
+  res.json(caps.map((c) => ({ ...c.workshop, capabilityLeadTimeDays: c.leadTimeDays })));
 });
 
 // ─── Matières (ID matière) ────────────────────────────────────────────────────

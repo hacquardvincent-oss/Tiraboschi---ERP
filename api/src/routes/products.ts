@@ -57,9 +57,38 @@ productsRouter.get('/', async (req, res) => {
 });
 
 productsRouter.get('/:id', async (req, res) => {
-  const p = await prisma.product.findUnique({ where: { id: req.params.id } });
+  const p = await prisma.product.findUnique({
+    where: { id: req.params.id },
+    include: { bomLines: { include: { material: true } } },
+  });
   if (!p) return res.status(404).json({ error: 'Fiche introuvable.' });
   res.json(p);
+});
+
+// Remplace la nomenclature chiffrée (lignes matière reliées au stock) d'une fiche
+productsRouter.put('/:id/bom', async (req, res) => {
+  const lines: { materialId?: string; role?: string; quantity?: unknown; unit?: string }[] = Array.isArray(req.body?.lines)
+    ? req.body.lines
+    : [];
+  try {
+    await prisma.$transaction([
+      prisma.bomLine.deleteMany({ where: { productId: req.params.id } }),
+      prisma.bomLine.createMany({
+        data: lines
+          .filter((l) => l.materialId && l.quantity !== undefined && l.quantity !== '' && l.quantity !== null)
+          .map((l) => ({
+            productId: req.params.id,
+            materialId: l.materialId as string,
+            role: l.role || 'principale',
+            quantity: l.quantity as never,
+            unit: l.unit || 'piece',
+          })),
+      }),
+    ]);
+    res.json(await prisma.bomLine.findMany({ where: { productId: req.params.id }, include: { material: true } }));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
 });
 
 productsRouter.post('/', async (req, res) => {

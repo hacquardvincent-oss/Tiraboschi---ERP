@@ -94,6 +94,7 @@ model Product {
   // Sync Shopify
   shopifyProductId String?
 
+  bomLines  BomLine[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -127,10 +128,30 @@ model Workshop {
   contactEmail     String?
   contactPhone     String?
   notes            String?
+  location         String?
+  leadTimeDays     Int? // délai de fabrication forfaitaire
+  capacityPerMonth Int? // capacité indicative (pièces/mois)
+  moq              Int? // quantité minimale par lancement
+  transitDays      Int? // transit entrepôt ↔ atelier (jours)
+  shippingCost     Decimal?         @db.Decimal(12, 2)
+  capabilities     WorkshopCapability[]
   stockMovements   StockMovement[]
   productionOrders ProductionOrder[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+}
+
+// Matrice de compétences : quels modèles un atelier sait produire (+ délai éventuel par modèle)
+model WorkshopCapability {
+  id           String   @id @default(cuid())
+  workshop     Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  workshopId   String
+  modelCode    String // code modèle du référentiel
+  leadTimeDays Int? // override du délai pour ce modèle
+  createdAt    DateTime @default(now())
+
+  @@unique([workshopId, modelCode])
+  @@index([modelCode])
 }
 
 model Material {
@@ -147,8 +168,25 @@ model Material {
   poLines           PurchaseOrderLine[]
   receiptLines      GoodsReceiptLine[]
   stockMovements    StockMovement[]
+  bomLines          BomLine[]
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+}
+
+// Ligne de nomenclature chiffrée : matière réelle consommée par un produit (quantité + unité)
+model BomLine {
+  id         String   @id @default(cuid())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  material   Material @relation(fields: [materialId], references: [id])
+  materialId String
+  role       String   @default("principale") // principale / secondaire / tertiaire / doublure / bijouterie
+  quantity   Decimal  @db.Decimal(12, 3)
+  unit       String   @default("piece") // dm² / feet / piece …
+  createdAt  DateTime @default(now())
+
+  @@index([productId])
+  @@index([materialId])
 }
 
 // ─── APPROVISIONNEMENT ──────────────────────────────────────────────────────
