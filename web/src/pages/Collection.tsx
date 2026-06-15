@@ -6,12 +6,37 @@ interface Product {
   id: string;
   sku: string;
   name: string;
-  priceHtEur?: string | null;
+  status: 'DRAFT' | 'VALIDATED';
+  modelCode?: string | null;
+  materialCode?: string | null;
+  optionCode?: string | null;
+  colorCode?: string | null;
   priceHtUsd?: string | null;
+}
+
+interface BomMaterial {
+  role: string;
+  animal: string;
+  type: string;
+  color: string;
+  qty: string;
+  supplier: string;
+  details: string;
+}
+interface BomJewelry {
+  details: string;
+  qty: string;
+  supplier: string;
+}
+interface Bom {
+  options: string[];
+  materials: BomMaterial[];
+  jewelry: BomJewelry[];
 }
 
 const EMPTY = {
   name: '',
+  status: 'DRAFT' as 'DRAFT' | 'VALIDATED',
   modelCode: '',
   yearCode: '',
   seasonCode: '',
@@ -30,8 +55,14 @@ const EMPTY = {
   priceHtUsd: '',
   costMaterial: '',
   costMaking: '',
+  dutiesShippingUsd: '',
+  finalPriceDdp: '',
+  hsCode: '',
+  countryOrigin: '',
 };
 type Form = typeof EMPTY;
+
+const emptyBom = (): Bom => ({ options: [], materials: [], jewelry: [] });
 
 function liveSku(f: Form): string {
   const opt = (f.optionCode || '00').padStart(2, '0');
@@ -43,7 +74,12 @@ export function Collection() {
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
   const [form, setForm] = useState<Form>(EMPTY);
+  const [bom, setBom] = useState<Bom>(emptyBom());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [shopifyId, setShopifyId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = (query = '') =>
@@ -56,25 +92,59 @@ export function Collection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  const set = (k: keyof Form) => (v: string) => setForm({ ...form, [k]: v });
-  const setInput = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof Form) => (v: string) => setForm((f) => ({ ...f, [k]: v } as Form));
+  const setInput =
+    (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [k]: e.target.value } as Form));
+
+  function newSheet() {
+    setForm(EMPTY);
+    setBom(emptyBom());
+    setEditingId(null);
+    setShopifyId(null);
+    setErr('');
+    setInfo('');
+    setView('form');
+  }
+
+  async function edit(id: string) {
+    setErr('');
+    setInfo('');
+    try {
+      const p = await api<Record<string, unknown>>('/api/products/' + id);
+      const next = { ...EMPTY } as Record<string, unknown>;
+      (Object.keys(EMPTY) as (keyof Form)[]).forEach((k) => {
+        const v = p[k];
+        if (v !== null && v !== undefined) next[k] = k === 'status' ? v : String(v);
+      });
+      if (Array.isArray(p.jewelryCodes)) next.jewelry = (p.jewelryCodes as string[])[0] ?? '';
+      setForm(next as Form);
+      const b = p.bom as Bom | null;
+      setBom(b ? { options: b.options ?? [], materials: b.materials ?? [], jewelry: b.jewelry ?? [] } : emptyBom());
+      setEditingId(id);
+      setShopifyId((p.shopifyProductId as string | null) ?? null);
+      setView('form');
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  function body() {
+    const { jewelry, ...rest } = form;
+    return { ...rest, jewelryCodes: jewelry ? [jewelry] : [], bom };
+  }
 
   async function save() {
     setErr('');
-    if (!form.name) {
-      setErr('Le nom du produit est requis.');
-      return;
-    }
+    setInfo('');
+    if (!form.name) return setErr('Le nom du produit est requis.');
     setSaving(true);
     try {
-      const { jewelry, ...rest } = form;
-      await api('/api/products', {
-        method: 'POST',
-        body: { ...rest, jewelryCodes: jewelry ? [jewelry] : [] },
-      });
-      setForm(EMPTY);
-      setView('list');
+      const saved = editingId
+        ? await api<{ id: string }>('/api/products/' + editingId, { method: 'PUT', body: body() })
+        : await api<{ id: string }>('/api/products', { method: 'POST', body: body() });
+      setEditingId(saved.id);
+      setInfo('Fiche enregistrée.');
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -82,71 +152,58 @@ export function Collection() {
     }
   }
 
-  if (view === 'form') {
-    return (
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base">Nouvelle fiche technique</h2>
-          <button className="text-white/50 text-sm" onClick={() => setView('list')}>
-            ← Catalogue
-          </button>
-        </div>
-
-        <div className="text-center mb-4">
-          <div className="text-xs text-white/40">SKU généré</div>
-          <div className="text-xl font-semibold tracking-wider text-azure break-all">{liveSku(form)}</div>
-        </div>
-
-        <Section title="Identité">
-          <F label="Nom produit *">
-            <input className="field" value={form.name} onChange={setInput('name')} />
-          </F>
-          <F label="Modèle"><RefSelect category="models" value={form.modelCode} onChange={set('modelCode')} /></F>
-          <F label="Année"><RefSelect category="years" value={form.yearCode} onChange={set('yearCode')} /></F>
-          <F label="Saison"><RefSelect category="seasons" value={form.seasonCode} onChange={set('seasonCode')} /></F>
-          <F label="Matière (ID)">
-            <input className="field" value={form.materialCode} onChange={setInput('materialCode')} placeholder="CU002 / CE001" />
-          </F>
-          <F label="Option"><RefSelect category="options" value={form.optionCode} onChange={set('optionCode')} /></F>
-          <F label="Couleur"><RefSelect category="colors" value={form.colorCode} onChange={set('colorCode')} /></F>
-          <F label="Taille"><RefSelect category="sizes" value={form.sizeCode} onChange={set('sizeCode')} /></F>
-        </Section>
-
-        <Section title="Nomenclature (BOM)">
-          <F label="Animal"><RefSelect category="animalTypes" value={form.animalCode} onChange={set('animalCode')} /></F>
-          <F label="Type de peau"><RefSelect category="skinTypes" value={form.skinTypeCode} onChange={set('skinTypeCode')} /></F>
-          <F label="Doublure"><RefSelect category="linings" value={form.liningCode} onChange={set('liningCode')} /></F>
-          <F label="Bijouterie"><RefSelect category="jewelry" value={form.jewelry} onChange={set('jewelry')} /></F>
-          <F label="Atelier"><RefSelect category="ateliers" value={form.atelierCode} onChange={set('atelierCode')} /></F>
-          <F label="Fournisseur"><RefSelect category="suppliers" value={form.supplierCode} onChange={set('supplierCode')} /></F>
-          <F label="Packaging">
-            <input className="field" value={form.packaging} onChange={setInput('packaging')} />
-          </F>
-        </Section>
-
-        <Section title="Finance">
-          <F label="Prix HT € (EUR)"><input className="field" type="number" step="0.01" value={form.priceHtEur} onChange={setInput('priceHtEur')} /></F>
-          <F label="Prix HT $ (USD)"><input className="field" type="number" step="0.01" value={form.priceHtUsd} onChange={setInput('priceHtUsd')} /></F>
-          <F label="Coût matière"><input className="field" type="number" step="0.01" value={form.costMaterial} onChange={setInput('costMaterial')} /></F>
-          <F label="Coût façon"><input className="field" type="number" step="0.01" value={form.costMaking} onChange={setInput('costMaking')} /></F>
-        </Section>
-
-        {err && <p className="text-red-400 text-sm mt-2">{err}</p>}
-        <button className="btn w-full mt-4" onClick={save} disabled={saving}>
-          {saving ? 'Enregistrement…' : 'Enregistrer la fiche'}
-        </button>
-      </div>
-    );
+  async function syncShopify() {
+    if (!editingId) return setErr('Enregistre la fiche avant de synchroniser.');
+    setErr('');
+    setInfo('');
+    setSaving(true);
+    try {
+      const res = await api<{ shopify: { name: string } }>(`/api/products/${editingId}/sync-shopify`, { method: 'POST', body: {} });
+      setShopifyId('synced');
+      setInfo(`Synchronisé avec Shopify : ${res.shopify.name}.`);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   }
+
+  async function remove() {
+    if (!editingId) return;
+    if (!confirm('Supprimer cette fiche ?')) return;
+    try {
+      await api('/api/products/' + editingId, { method: 'DELETE' });
+      setView('list');
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  if (view === 'form') return renderForm();
+
+  // ─── Vue liste : arborescence Modèle → Matière → Option → déclinaisons ───────
+  const filtered = products.filter((p) => {
+    const t = q.trim().toLowerCase();
+    if (!t) return true;
+    return p.sku.toLowerCase().includes(t) || p.name.toLowerCase().includes(t);
+  });
+  const tree: Record<string, Record<string, Record<string, Product[]>>> = {};
+  for (const p of filtered) {
+    const m = p.modelCode || p.name || '(sans modèle)';
+    const mat = p.materialCode || '—';
+    const opt = p.optionCode || '—';
+    ((tree[m] ??= {})[mat] ??= {})[opt] ??= [];
+    tree[m][mat][opt].push(p);
+  }
+  const validated = products.filter((p) => p.status === 'VALIDATED').length;
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base">Collection — Catalogue</h2>
-        <button className="btn" onClick={() => setView('form')}>
-          + Nouvelle fiche
-        </button>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-base">Collection</h2>
+        <button className="btn" onClick={newSheet}>+ Nouveau modèle</button>
       </div>
+      <div className="text-xs text-white/40 mb-3">{validated} modèle(s) validé(s) · {products.length} déclinaison(s)</div>
       <input
         className="field mb-3"
         placeholder="Rechercher (SKU ou nom)…"
@@ -157,34 +214,194 @@ export function Collection() {
         }}
       />
       {err && <p className="text-red-400 text-sm">{err}</p>}
-      <table className="w-full text-sm">
-        <thead className="text-white/50 text-left">
-          <tr>
-            <th className="py-1">SKU</th>
-            <th className="py-1">Produit</th>
-            <th className="py-1">€ HT</th>
-            <th className="py-1">$ HT</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((p) => (
-            <tr key={p.id} className="border-t border-white/10">
-              <td className="py-1.5 font-mono text-azure">{p.sku}</td>
-              <td className="py-1.5">{p.name}</td>
-              <td className="py-1.5">{p.priceHtEur ?? '—'}</td>
-              <td className="py-1.5">{p.priceHtUsd ?? '—'}</td>
-            </tr>
-          ))}
-          {products.length === 0 && (
-            <tr>
-              <td colSpan={4} className="py-3 text-white/40">
-                Aucune fiche. Crée-en une avec « + Nouvelle fiche ».
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+
+      {Object.keys(tree).length === 0 && (
+        <p className="py-3 text-white/40 text-sm">Aucune fiche. Crée-en une avec « + Nouveau modèle ».</p>
+      )}
+
+      {Object.entries(tree).map(([model, mats]) => {
+        const isCollapsed = collapsed[model];
+        const count = Object.values(mats).flatMap((o) => Object.values(o)).flat().length;
+        return (
+          <div key={model} className="border border-white/10 rounded mb-2">
+            <button
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/5"
+              onClick={() => setCollapsed((c) => ({ ...c, [model]: !c[model] }))}
+            >
+              <span className="font-semibold">{model}</span>
+              <span className="text-white/40 text-xs">{count} décl. {isCollapsed ? '▸' : '▾'}</span>
+            </button>
+            {!isCollapsed && (
+              <div className="px-3 pb-2">
+                {Object.entries(mats).map(([mat, opts]) => (
+                  <div key={mat} className="mt-1">
+                    <div className="text-xs uppercase tracking-editorial text-white/40 mt-2">Matière {mat}</div>
+                    {Object.entries(opts).map(([opt, decls]) => (
+                      <div key={opt} className="ml-2">
+                        <div className="text-[11px] text-white/30 mt-1">Option {opt}</div>
+                        {decls.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between py-1 text-sm border-b border-white/5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-azure text-xs">{p.sku}</span>
+                              <StatusBadge status={p.status} />
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-white/60">{p.priceHtUsd ? '$' + p.priceHtUsd : '—'}</span>
+                              <button className="text-azure text-xs" onClick={() => edit(p.id)}>Modifier</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
+  );
+
+  function renderForm() {
+    return (
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base">{editingId ? 'Fiche technique' : 'Nouvelle fiche technique'}</h2>
+          <button className="text-white/50 text-sm" onClick={() => setView('list')}>← Catalogue</button>
+        </div>
+
+        <div className="text-center mb-4">
+          <div className="text-xs text-white/40">SKU généré</div>
+          <div className="text-xl font-semibold tracking-wider text-azure break-all">{liveSku(form)}</div>
+        </div>
+
+        <Section title="1. Identification">
+          <F label="Nom produit *"><input className="field" value={form.name} onChange={setInput('name')} /></F>
+          <F label="Modèle"><RefSelect category="models" value={form.modelCode} onChange={set('modelCode')} /></F>
+          <F label="Matière (ID)"><input className="field" value={form.materialCode} onChange={setInput('materialCode')} placeholder="CU002 / CE001" /></F>
+          <F label="Couleur"><RefSelect category="colors" value={form.colorCode} onChange={set('colorCode')} /></F>
+          <F label="Taille"><RefSelect category="sizes" value={form.sizeCode} onChange={set('sizeCode')} /></F>
+          <F label="Année"><RefSelect category="years" value={form.yearCode} onChange={set('yearCode')} /></F>
+          <F label="Saison"><RefSelect category="seasons" value={form.seasonCode} onChange={set('seasonCode')} /></F>
+        </Section>
+
+        <Section title="2. Options fonctionnelles">
+          <div className="col-span-2 space-y-2">
+            {bom.options.map((o, i) => (
+              <div key={i} className="flex gap-2">
+                <input className="field flex-1" value={o} placeholder="ex. Avec pochon" onChange={(e) => setBom((b) => ({ ...b, options: b.options.map((x, j) => (j === i ? e.target.value : x)) }))} />
+                <button className="text-red-400/70" onClick={() => setBom((b) => ({ ...b, options: b.options.filter((_, j) => j !== i) }))}>✕</button>
+              </div>
+            ))}
+            <button className="text-azure text-sm" onClick={() => setBom((b) => ({ ...b, options: [...b.options, ''] }))}>+ Ajouter une option</button>
+          </div>
+        </Section>
+
+        <Section title="3. Fabrication">
+          <F label="Atelier"><RefSelect category="ateliers" value={form.atelierCode} onChange={set('atelierCode')} /></F>
+          <F label="Option (code SKU)"><RefSelect category="options" value={form.optionCode} onChange={set('optionCode')} /></F>
+        </Section>
+
+        <Section title="4. Nomenclature (matières)">
+          <F label="Animal (principal)"><RefSelect category="animalTypes" value={form.animalCode} onChange={set('animalCode')} /></F>
+          <F label="Type de peau"><RefSelect category="skinTypes" value={form.skinTypeCode} onChange={set('skinTypeCode')} /></F>
+          <F label="Doublure"><RefSelect category="linings" value={form.liningCode} onChange={set('liningCode')} /></F>
+          <F label="Fournisseur"><RefSelect category="suppliers" value={form.supplierCode} onChange={set('supplierCode')} /></F>
+          <div className="col-span-2 space-y-2">
+            {bom.materials.map((m, i) => (
+              <div key={i} className="border border-white/10 rounded p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <select className="field w-40" value={m.role} onChange={(e) => updMat(i, { role: e.target.value })}>
+                    <option value="secondaire">Matière secondaire</option>
+                    <option value="tertiaire">Matière tertiaire</option>
+                    <option value="doublure">Doublure</option>
+                  </select>
+                  <button className="text-red-400/70" onClick={() => setBom((b) => ({ ...b, materials: b.materials.filter((_, j) => j !== i) }))}>✕</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="field" placeholder="Animal" value={m.animal} onChange={(e) => updMat(i, { animal: e.target.value })} />
+                  <input className="field" placeholder="Type" value={m.type} onChange={(e) => updMat(i, { type: e.target.value })} />
+                  <input className="field" placeholder="Coloris" value={m.color} onChange={(e) => updMat(i, { color: e.target.value })} />
+                  <input className="field" placeholder="Quantité" value={m.qty} onChange={(e) => updMat(i, { qty: e.target.value })} />
+                  <input className="field col-span-2" placeholder="Fournisseur" value={m.supplier} onChange={(e) => updMat(i, { supplier: e.target.value })} />
+                </div>
+              </div>
+            ))}
+            <button className="text-azure text-sm" onClick={() => setBom((b) => ({ ...b, materials: [...b.materials, { role: 'secondaire', animal: '', type: '', color: '', qty: '', supplier: '', details: '' }] }))}>+ Ajouter une matière</button>
+          </div>
+        </Section>
+
+        <Section title="5. Bijouterie">
+          <F label="Bijouterie (réf.)"><RefSelect category="jewelry" value={form.jewelry} onChange={set('jewelry')} /></F>
+          <div className="col-span-2 space-y-2">
+            {bom.jewelry.map((j, i) => (
+              <div key={i} className="grid grid-cols-2 gap-2 border border-white/10 rounded p-2">
+                <input className="field col-span-2" placeholder="Détail" value={j.details} onChange={(e) => updJew(i, { details: e.target.value })} />
+                <input className="field" placeholder="Quantité" value={j.qty} onChange={(e) => updJew(i, { qty: e.target.value })} />
+                <div className="flex gap-2">
+                  <input className="field flex-1" placeholder="Fournisseur" value={j.supplier} onChange={(e) => updJew(i, { supplier: e.target.value })} />
+                  <button className="text-red-400/70" onClick={() => setBom((b) => ({ ...b, jewelry: b.jewelry.filter((_, k) => k !== i) }))}>✕</button>
+                </div>
+              </div>
+            ))}
+            <button className="text-azure text-sm" onClick={() => setBom((b) => ({ ...b, jewelry: [...b.jewelry, { details: '', qty: '', supplier: '' }] }))}>+ Ajouter une bijouterie</button>
+          </div>
+        </Section>
+
+        <Section title="6. Prix & coûts">
+          <F label="Prix HT € (EUR)"><input className="field" type="number" step="0.01" value={form.priceHtEur} onChange={setInput('priceHtEur')} /></F>
+          <F label="Prix HT $ (USD)"><input className="field" type="number" step="0.01" value={form.priceHtUsd} onChange={setInput('priceHtUsd')} /></F>
+          <F label="Coût matière"><input className="field" type="number" step="0.01" value={form.costMaterial} onChange={setInput('costMaterial')} /></F>
+          <F label="Coût façon"><input className="field" type="number" step="0.01" value={form.costMaking} onChange={setInput('costMaking')} /></F>
+          <F label="Duties + shipping $"><input className="field" type="number" step="0.01" value={form.dutiesShippingUsd} onChange={setInput('dutiesShippingUsd')} /></F>
+          <F label="Prix final DDP"><input className="field" type="number" step="0.01" value={form.finalPriceDdp} onChange={setInput('finalPriceDdp')} /></F>
+        </Section>
+
+        <Section title="7. Logistique & douanes">
+          <F label="Code HS"><RefSelect category="hsCodes" value={form.hsCode} onChange={set('hsCode')} /></F>
+          <F label="Pays d'origine"><RefSelect category="origins" value={form.countryOrigin} onChange={set('countryOrigin')} /></F>
+          <F label="Packaging"><input className="field" value={form.packaging} onChange={setInput('packaging')} /></F>
+        </Section>
+
+        <Section title="8. Statut">
+          <F label="Statut">
+            <select className="field" value={form.status} onChange={(e) => set('status')(e.target.value)}>
+              <option value="DRAFT">Brouillon</option>
+              <option value="VALIDATED">Validé</option>
+            </select>
+          </F>
+        </Section>
+
+        {err && <p className="text-red-400 text-sm mt-2">{err}</p>}
+        {info && <p className="text-green-400 text-sm mt-2">{info}</p>}
+
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <button className="btn" onClick={save} disabled={saving}>{saving ? '…' : 'Sauvegarder la fiche'}</button>
+          <button className="btn" onClick={syncShopify} disabled={saving || !editingId} title={editingId ? '' : 'Enregistre d’abord'}>
+            {shopifyId ? 'Re-sync Shopify' : 'Sync Shopify'}
+          </button>
+        </div>
+        {editingId && (
+          <button className="text-red-400 text-sm mt-3" onClick={remove}>Supprimer la fiche</button>
+        )}
+      </div>
+    );
+  }
+
+  function updMat(i: number, patch: Partial<BomMaterial>) {
+    setBom((b) => ({ ...b, materials: b.materials.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
+  }
+  function updJew(i: number, patch: Partial<BomJewelry>) {
+    setBom((b) => ({ ...b, jewelry: b.jewelry.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
+  }
+}
+
+function StatusBadge({ status }: { status: 'DRAFT' | 'VALIDATED' }) {
+  return status === 'VALIDATED' ? (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">Validé</span>
+  ) : (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">Brouillon</span>
   );
 }
 

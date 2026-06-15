@@ -285,6 +285,60 @@ export async function getReports(): Promise<DashboardReports> {
   };
 }
 
+// ─── PLM : synchronisation produit Shopify ───────────────────────────────────
+
+export interface ProductSyncInput {
+  shopifyProductId?: string | null;
+  title: string;
+  sku: string;
+  /** Prix dans la devise boutique (EUR). */
+  price?: string;
+  status: 'ACTIVE' | 'DRAFT';
+  hsCode?: string | null;
+  countryOrigin?: string | null;
+}
+
+interface ProductSetResult {
+  productSet: {
+    product: { id: string; title: string; handle: string; status: string } | null;
+    userErrors: { field: string[] | null; message: string }[];
+  };
+}
+
+/**
+ * Crée ou met à jour le produit Shopify depuis la fiche PLM (mutation déclarative productSet,
+ * produit mono-variante). Retourne l'id Shopify pour mémorisation côté app.
+ */
+export async function syncProductToShopify(input: ProductSyncInput): Promise<{ id: string; name: string }> {
+  const variant: Record<string, unknown> = {
+    sku: input.sku,
+    optionValues: [{ optionName: 'Title', name: 'Default Title' }],
+  };
+  if (input.price) variant.price = input.price;
+
+  const productInput: Record<string, unknown> = {
+    title: input.title,
+    status: input.status,
+    productOptions: [{ name: 'Title', values: [{ name: 'Default Title' }] }],
+    variants: [variant],
+  };
+  if (input.shopifyProductId) productInput.id = input.shopifyProductId;
+
+  const mutation = `
+    mutation ProductSet($input: ProductSetInput!) {
+      productSet(synchronous: true, input: $input) {
+        product { id title handle status }
+        userErrors { field message }
+      }
+    }`;
+  const res = await shopifyGraphQL<ProductSetResult>(mutation, { input: productInput });
+  const errs = res.productSet.userErrors;
+  if (errs.length > 0) throw new Error(errs.map((e) => e.message).join(', '));
+  const p = res.productSet.product;
+  if (!p) throw new Error('Shopify n’a pas renvoyé le produit.');
+  return { id: p.id, name: p.title };
+}
+
 // ─── CRM (clients Shopify) ──────────────────────────────────────────────────
 export async function searchCustomers(q: string): Promise<unknown> {
   return shopifyGraphQL(

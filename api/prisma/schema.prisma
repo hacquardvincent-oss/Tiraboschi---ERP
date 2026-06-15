@@ -48,10 +48,17 @@ model RefItem {
 }
 
 // ─── PLM : fiche technique produit (Collection) ───────────────────────────────
+enum ProductStatus {
+  DRAFT // Brouillon
+  VALIDATED // Validé
+}
+
 model Product {
   id   String @id @default(cuid())
   sku  String @unique
   name String
+
+  status ProductStatus @default(DRAFT)
 
   // Composants du SKU (codes issus du référentiel)
   modelCode    String?
@@ -73,10 +80,16 @@ model Product {
   bom          Json?
 
   // Finance
-  priceHtEur   Decimal? @db.Decimal(12, 2)
-  priceHtUsd   Decimal? @db.Decimal(12, 2)
-  costMaterial Decimal? @db.Decimal(12, 2)
-  costMaking   Decimal? @db.Decimal(12, 2)
+  priceHtEur        Decimal? @db.Decimal(12, 2)
+  priceHtUsd        Decimal? @db.Decimal(12, 2)
+  costMaterial      Decimal? @db.Decimal(12, 2)
+  costMaking        Decimal? @db.Decimal(12, 2)
+  dutiesShippingUsd Decimal? @db.Decimal(12, 2)
+  finalPriceDdp     Decimal? @db.Decimal(12, 2)
+
+  // Logistique & douanes
+  hsCode        String?
+  countryOrigin String?
 
   // Sync Shopify
   shopifyProductId String?
