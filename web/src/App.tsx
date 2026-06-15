@@ -1,5 +1,6 @@
 import { I18nProvider } from './i18n';
 import { AuthProvider, CurrencyProvider, useAuth } from './store';
+import { ToastProvider } from './toast';
 import { Login } from './components/Login';
 import { Shell } from './components/Shell';
 
@@ -11,11 +12,13 @@ function Gate() {
 export function App() {
   return (
     <I18nProvider>
-      <AuthProvider>
-        <CurrencyProvider>
-          <Gate />
-        </CurrencyProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <CurrencyProvider>
+            <Gate />
+          </CurrencyProvider>
+        </AuthProvider>
+      </ToastProvider>
     </I18nProvider>
   );
 }

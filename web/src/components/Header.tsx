@@ -18,7 +18,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-10 bg-ink border-b border-white/10 px-4 py-3 flex items-center justify-between"
-      style={{ boxShadow: '0 2px 0 0 #00D4FF' }}>
+      style={{ boxShadow: '0 1px 0 0 #C9A86A' }}>
       <Logo compact />
       <div className="flex items-center gap-2 text-xs">
         {conn && (

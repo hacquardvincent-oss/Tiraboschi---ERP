@@ -10,7 +10,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
         <span className="font-serif text-xl text-white" style={{ letterSpacing: '0.02em' }}>
           Tiraboschi
         </span>
-        <span className="text-azure text-[9px] tracking-editorial">SINCE 1904</span>
+        <span className="text-gold text-[9px] tracking-editorial">SINCE 1904</span>
       </div>
     );
   }
@@ -19,8 +19,8 @@ export function Logo({ compact = false }: { compact?: boolean }) {
       <div className="font-serif text-white" style={{ fontSize: '2.6rem', lineHeight: 1.05, letterSpacing: '0.02em' }}>
         Tiraboschi
       </div>
-      <div className="text-azure text-[11px] tracking-editorial mt-1">SINCE 1904</div>
-      <div className="mx-auto mt-3 h-px w-16 bg-azure" />
+      <div className="text-gold text-[11px] tracking-editorial mt-1">SINCE 1904</div>
+      <div className="mx-auto mt-3 h-px w-16 bg-gold" />
     </div>
   );
 }

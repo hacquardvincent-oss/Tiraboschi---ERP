@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { RefSelect } from '../components/RefSelect';
+import { useToast } from '../toast';
 
 interface Product {
   id: string;
@@ -103,6 +104,7 @@ function liveSku(f: Form): string {
 }
 
 export function Collection() {
+  const toast = useToast();
   const [view, setView] = useState<'list' | 'form'>('list');
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
@@ -134,11 +136,14 @@ export function Collection() {
         method: 'POST',
         body: { csv: csvText },
       });
-      setImportMsg(`${r.created} créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s)${r.errors.length ? `, ${r.errors.length} erreur(s)` : ''}.`);
+      const summary = `${r.created} créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s)${r.errors.length ? `, ${r.errors.length} erreur(s)` : ''}.`;
+      setImportMsg(summary);
+      toast(summary, r.errors.length ? 'info' : 'success');
       setCsvText('');
       load(q);
     } catch (e) {
       setImportMsg((e as Error).message);
+      toast((e as Error).message, 'error');
     } finally {
       setImporting(false);
     }

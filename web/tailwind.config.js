@@ -4,10 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Design system "The Blue Sole"
-        ink: '#050505',
-        panel: 'rgba(15, 15, 15, 0.95)',
-        azure: '#00D4FF',
+        // Design system "The Blue Sole" — direction luxe (bleu profond + or champagne)
+        ink: '#0C0B0A', // noir encre légèrement chaud
+        panel: 'rgba(22, 20, 18, 0.96)',
+        azure: '#6FA8C7', // bleu acier adouci (secondaire / liens)
+        gold: '#C9A86A', // or champagne (accent maison / CTA)
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

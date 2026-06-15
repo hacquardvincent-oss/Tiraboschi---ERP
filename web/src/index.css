@@ -20,23 +20,46 @@
 }
 
 @layer components {
-  /* Bouton noir + ligne d'ombre azur (rappel de la semelle) */
+  /* Bouton noir + fine ligne or (accent maison, rappel de la semelle) */
   .btn {
-    @apply bg-ink text-white px-4 py-3 rounded font-medium;
-    box-shadow: 0 2px 0 0 theme('colors.azure');
+    @apply bg-ink text-white px-4 py-3 rounded font-medium transition-shadow;
+    box-shadow: 0 2px 0 0 theme('colors.gold');
+  }
+  .btn:hover {
+    box-shadow: 0 3px 0 0 theme('colors.gold');
   }
   .btn:active {
     @apply translate-y-px;
   }
+  .btn:disabled {
+    @apply opacity-50;
+  }
   .field {
-    @apply w-full px-3 py-3 rounded bg-white/5 border border-white/15 text-white outline-none;
+    @apply w-full px-3 py-3 rounded bg-white/5 border border-white/15 text-white outline-none transition-colors;
     min-height: 44px;
   }
   .field:focus {
-    @apply border-azure;
-    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.3);
+    @apply border-gold;
+    box-shadow: 0 0 0 2px rgba(201, 168, 106, 0.3);
   }
   .card {
     @apply bg-panel border border-white/10 rounded p-4;
+  }
+  /* Apparition douce (toasts, panneaux) */
+  @keyframes fadeup {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fadeup {
+    animation: fadeup 0.18s ease-out;
+  }
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .skeleton {
+    @apply rounded bg-white/5;
+    background-image: linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.10) 200px, rgba(255,255,255,0.04) 400px);
+    animation: shimmer 1.4s infinite linear;
   }
 }
