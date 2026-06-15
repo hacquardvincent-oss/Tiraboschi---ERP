@@ -31,6 +31,19 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function Admin() {
+  const [adminTab, setAdminTab] = useState<'bdd' | 'users'>('bdd');
+  return (
+    <div>
+      <div className="flex gap-2 mb-3 text-sm">
+        <button className={'px-3 py-1 rounded border ' + (adminTab === 'bdd' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setAdminTab('bdd')}>Base de données</button>
+        <button className={'px-3 py-1 rounded border ' + (adminTab === 'users' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setAdminTab('users')}>Utilisateurs</button>
+      </div>
+      {adminTab === 'bdd' ? <RefAdmin /> : <UsersAdmin />}
+    </div>
+  );
+}
+
+function RefAdmin() {
   const [cats, setCats] = useState<string[]>([]);
   const [cat, setCat] = useState('');
   const [items, setItems] = useState<RefItem[]>([]);
@@ -147,6 +160,142 @@ export function Admin() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+interface AppUser {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: 'ADMIN' | 'SELLER';
+  permissions: string[];
+  active: boolean;
+}
+const MODULES: [string, string][] = [
+  ['dashboard', 'Accueil'],
+  ['pos', 'Caisse'],
+  ['collection', 'Collection'],
+  ['crm', 'Clients'],
+  ['sales', 'Ventes'],
+  ['inventory', 'OPS / Stock'],
+  ['admin', 'Admin'],
+];
+const EMPTY_USER = { email: '', password: '', firstName: '', lastName: '', role: 'SELLER' as 'ADMIN' | 'SELLER', permissions: [] as string[] };
+
+function UsersAdmin() {
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [f, setF] = useState({ ...EMPTY_USER });
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const reload = () => api<AppUser[]>('/api/users').then(setUsers).catch((e) => setErr((e as Error).message));
+  useEffect(() => {
+    reload();
+  }, []);
+
+  function openNew() {
+    setEditingId(null);
+    setF({ ...EMPTY_USER });
+    setAdding(true);
+    setErr('');
+    setMsg('');
+  }
+  function openEdit(u: AppUser) {
+    setEditingId(u.id);
+    setF({ email: u.email, password: '', firstName: u.firstName ?? '', lastName: u.lastName ?? '', role: u.role, permissions: u.permissions });
+    setAdding(true);
+    setErr('');
+    setMsg('');
+  }
+  function togglePerm(code: string) {
+    setF((s) => ({ ...s, permissions: s.permissions.includes(code) ? s.permissions.filter((p) => p !== code) : [...s.permissions, code] }));
+  }
+  async function save() {
+    setErr('');
+    setMsg('');
+    if (!f.email || (!editingId && !f.password)) return setErr('Email et mot de passe requis.');
+    try {
+      if (editingId) {
+        const { ...body } = f;
+        await api('/api/users/' + editingId, { method: 'PATCH', body });
+      } else {
+        await api('/api/users', { method: 'POST', body: f });
+      }
+      setAdding(false);
+      setMsg('Enregistré.');
+      reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+  async function remove(id: string) {
+    if (!confirm('Supprimer cet utilisateur ?')) return;
+    try {
+      await api('/api/users/' + id, { method: 'DELETE' });
+      reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base">Gestion des utilisateurs</h2>
+        <button className="btn" onClick={openNew}>+ Utilisateur</button>
+      </div>
+      {err && <p className="text-red-400 text-sm mb-2">{err}</p>}
+      {msg && <p className="text-green-400 text-sm mb-2">{msg}</p>}
+
+      {adding && (
+        <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input className="field" placeholder="Prénom" value={f.firstName} onChange={(e) => setF({ ...f, firstName: e.target.value })} />
+            <input className="field" placeholder="Nom" value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.target.value })} />
+            <input className="field" type="email" placeholder="Email" value={f.email} disabled={!!editingId} onChange={(e) => setF({ ...f, email: e.target.value })} />
+            <input className="field" type="password" placeholder={editingId ? 'Nouveau mot de passe (option)' : 'Mot de passe'} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
+          </div>
+          <select className="field" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as 'ADMIN' | 'SELLER' })}>
+            <option value="SELLER">Vendeur</option>
+            <option value="ADMIN">Administrateur</option>
+          </select>
+          <div>
+            <div className="text-[11px] text-white/40 mb-1">Accès par module</div>
+            <div className="flex flex-wrap gap-2">
+              {MODULES.map(([code, label]) => (
+                <label key={code} className={'text-xs px-2 py-1 rounded border cursor-pointer ' + (f.permissions.includes(code) ? 'border-azure text-azure' : 'border-white/20 text-white/50')}>
+                  <input type="checkbox" className="hidden" checked={f.permissions.includes(code)} onChange={() => togglePerm(code)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn flex-1" onClick={save}>{editingId ? 'Enregistrer' : 'Créer'}</button>
+            <button className="text-white/50 text-sm px-3" onClick={() => setAdding(false)}>Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {users.map((u) => (
+        <div key={u.id} className="flex items-center justify-between py-2 border-b border-white/10">
+          <div>
+            <div className="font-semibold text-sm">{[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} {!u.active && <span className="text-red-400 text-[11px]">(inactif)</span>}</div>
+            <div className="text-white/50 text-[11px]">
+              {u.role === 'ADMIN' ? 'Admin' : 'Vendeur'} · accès : [{u.permissions.length ? u.permissions.join(', ') : 'aucun'}]
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="text-azure text-xs" onClick={() => openEdit(u)}>Modifier</button>
+            <button className="text-red-400/70 text-xs" onClick={() => remove(u.id)}>✕</button>
+          </div>
+        </div>
+      ))}
+      {users.length === 0 && <p className="text-white/40 text-sm py-2">Aucun utilisateur.</p>}
     </div>
   );
 }
