@@ -138,6 +138,93 @@ export async function importCatalogCsv(text: string): Promise<ImportResult> {
   return res;
 }
 
+const MAT_CATEGORY: Record<string, 'LEATHER' | 'HARDWARE' | 'LINING' | 'PACKAGING' | 'OTHER'> = {
+  peaux: 'LEATHER',
+  cuir: 'LEATHER',
+  bijoux: 'HARDWARE',
+  bijouterie: 'HARDWARE',
+  fournitures: 'HARDWARE',
+  doublure: 'LINING',
+  packaging: 'PACKAGING',
+};
+
+/**
+ * Importe les matières (Peaux / Bijoux de l'inventaire) → table Material + stock initial.
+ * Idempotent : upsert par ID matière ; le stock initial est posé via un mouvement ADJUSTMENT
+ * de référence INIT-<code> (recréé à chaque import, donc le recomptage met à jour la base).
+ * Tolérant : lignes sans ID matière valide (vide / #ERROR!) ignorées.
+ */
+export async function importMaterialsCsv(text: string): Promise<ImportResult> {
+  const rows = parseCsv(text);
+  const res: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+
+  // Regroupe par ID matière (la source réutilise un même ID pour plusieurs coloris).
+  const groups = new Map<
+    string,
+    { name: string; category: string; unit: string; unitCost?: number; supplier?: string; qty: number }
+  >();
+  for (const row of rows) {
+    const code = col(row, 'id matière', 'id matiere', 'id');
+    if (!code || /error/i.test(code)) {
+      res.skipped++;
+      continue;
+    }
+    const animal = col(row, 'animal') ?? '';
+    const type = col(row, 'type') ?? '';
+    const couleur = col(row, 'couleur') ?? '';
+    const name = [animal, type, couleur].map((s) => s.trim()).filter(Boolean).join(' ') || code;
+    const catRaw = (col(row, 'catégorie', 'categorie') ?? '').toLowerCase().trim();
+    const category = MAT_CATEGORY[catRaw] ?? 'OTHER';
+    const unit = category === 'LEATHER' ? 'pied' : 'piece';
+    const costRaw = col(row, "coût d'achat", 'cout', 'coût', 'cout achat');
+    const unitCost = costRaw ? Number(costRaw.replace(/[^0-9.,]/g, '').replace(',', '.')) : undefined;
+    const supplier = col(row, 'fournisseur');
+    const qtyRaw = col(row, 'recomptage total', 'recomptage', '1er comptage', 'quantité', 'quantite', 'pieds');
+    const qty = qtyRaw ? Number(qtyRaw.replace(/[^0-9.,-]/g, '').replace(',', '.')) : 0;
+
+    const g = groups.get(code) ?? { name, category, unit, unitCost, supplier, qty: 0 };
+    g.name = name || g.name;
+    if (unitCost != null && !Number.isNaN(unitCost)) g.unitCost = unitCost;
+    if (supplier) g.supplier = supplier;
+    g.qty += Number.isNaN(qty) ? 0 : qty;
+    groups.set(code, g);
+  }
+
+  for (const [code, g] of groups) {
+    try {
+      let supplierId: string | undefined;
+      if (g.supplier) {
+        const existing = await prisma.supplier.findFirst({ where: { name: g.supplier } });
+        supplierId = existing ? existing.id : (await prisma.supplier.create({ data: { name: g.supplier } })).id;
+      }
+      const existingMat = await prisma.material.findUnique({ where: { code } });
+      const data = {
+        name: g.name,
+        category: g.category as never,
+        unit: g.unit,
+        ...(g.unitCost != null ? { unitCost: g.unitCost } : {}),
+        ...(supplierId ? { supplierId } : {}),
+      };
+      const mat = existingMat
+        ? await prisma.material.update({ where: { code }, data })
+        : await prisma.material.create({ data: { code, ...data } });
+      existingMat ? res.updated++ : res.created++;
+
+      // Stock initial : ADJUSTMENT idempotent (recréé)
+      const ref = 'INIT-' + code;
+      await prisma.stockMovement.deleteMany({ where: { materialId: mat.id, reference: ref } });
+      if (g.qty > 0) {
+        await prisma.stockMovement.create({
+          data: { materialId: mat.id, type: 'ADJUSTMENT', quantity: g.qty, reference: ref, note: 'Stock initial (import inventaire)' },
+        });
+      }
+    } catch (e) {
+      res.errors.push(`${code}: ${(e as Error).message}`);
+    }
+  }
+  return res;
+}
+
 /**
  * Importe une liste de référentiel (une catégorie) depuis un CSV.
  * Colonnes reconnues : code/id (optionnel) + label/nom/libellé. Code auto = label si absent.

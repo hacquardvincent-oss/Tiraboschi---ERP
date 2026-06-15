@@ -223,6 +223,22 @@ function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
   const [q, setQ] = useState('');
   const [mode, setMode] = useState<'' | 'in' | 'out'>('');
   const [mv, setMv] = useState({ materialId: '', quantity: '', note: '' });
+  const [showImport, setShowImport] = useState(false);
+  const [impCsv, setImpCsv] = useState('');
+  const [impMsg, setImpMsg] = useState('');
+
+  async function runImport() {
+    if (!impCsv.trim()) return setImpMsg('Choisis un fichier ou colle le CSV.');
+    setImpMsg('');
+    try {
+      const r = await api<{ created: number; updated: number; skipped: number }>('/api/erp/materials/import', { method: 'POST', body: { csv: impCsv } });
+      setImpMsg(`${r.created} créée(s), ${r.updated} mise(s) à jour, ${r.skipped} ignorée(s).`);
+      setImpCsv('');
+      reload();
+    } catch (e) {
+      setImpMsg((e as Error).message);
+    }
+  }
 
   const reload = () => {
     api<Summary>('/api/erp/summary').then(setS).catch((e) => onErr((e as Error).message));
@@ -265,7 +281,19 @@ function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
         <div className="flex gap-2 mb-3">
           <button className="btn flex-1" onClick={() => setMode(mode === 'in' ? '' : 'in')}>+ Réception</button>
           <button className="btn flex-1" onClick={() => setMode(mode === 'out' ? '' : 'out')}>Sortie exceptionnelle</button>
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>Importer CSV</button>
         </div>
+        {showImport && (
+          <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
+            <div className="text-xs text-white/50">Import inventaire matières (Peaux/Bijoux). Reconnu : ID Matière, Animal, Type, Couleur, Catégorie, Coût d'achat, Fournisseur, 1er comptage/Recomptage.</div>
+            <input type="file" accept=".csv,text/csv" className="text-xs" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(setImpCsv); }} />
+            <textarea className="field font-mono text-[11px]" rows={3} placeholder="…ou colle le CSV ici" value={impCsv} onChange={(e) => setImpCsv(e.target.value)} />
+            <div className="flex items-center gap-3">
+              <button className="btn" onClick={runImport}>Importer</button>
+              {impMsg && <span className="text-xs text-white/70">{impMsg}</span>}
+            </div>
+          </div>
+        )}
         {mode && (
           <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
             <div className="text-xs uppercase tracking-editorial text-white/50">

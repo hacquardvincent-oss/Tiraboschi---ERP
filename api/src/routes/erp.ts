@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth';
 import { assembleSku, deriveYearId, deriveSeasonId } from '../services/sku';
 import { pickingList, issueMaterials, receiveFinishedPieces } from '../services/fulfillment';
 import { createPOsFromSuggestions, receivePO } from '../services/purchasing';
+import { importMaterialsCsv } from '../services/import';
 
 export const erpRouter = Router();
 erpRouter.use(requireAuth);
@@ -123,6 +124,15 @@ erpRouter.post('/materials', async (req, res) => {
         data: { code, name, category, unit, unitCost, currency, reorderThreshold, supplierId },
       }),
     );
+  } catch (e) { fail(res, e); }
+});
+
+// Import CSV des matières (inventaire Peaux/Bijoux) → Material + stock initial
+erpRouter.post('/materials/import', async (req, res) => {
+  const csv = (req.body ?? {}).csv;
+  if (typeof csv !== 'string' || !csv.trim()) return res.status(400).json({ error: 'csv requis.' });
+  try {
+    res.json(await importMaterialsCsv(csv));
   } catch (e) { fail(res, e); }
 });
 
