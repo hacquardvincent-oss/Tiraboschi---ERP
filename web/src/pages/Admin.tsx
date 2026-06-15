@@ -51,6 +51,11 @@ function RefAdmin() {
   const [label, setLabel] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [showImport, setShowImport] = useState(false);
+  const [impCat, setImpCat] = useState('');
+  const [impCsv, setImpCsv] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState('');
 
   useEffect(() => {
     api<string[]>('/api/ref/categories')
@@ -90,6 +95,37 @@ function RefAdmin() {
     }
   }
 
+  async function runImport() {
+    setErr('');
+    setMsg('');
+    const category = (impCat || cat).trim();
+    if (!category || !impCsv.trim()) return setErr('Catégorie et CSV requis.');
+    try {
+      const r = await api<{ created: number; updated: number; skipped: number }>('/api/ref/import', {
+        method: 'POST',
+        body: { category, csv: impCsv },
+      });
+      setMsg(`${r.created} créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s).`);
+      setImpCsv('');
+      const c = await api<string[]>('/api/ref/categories');
+      setCats(c);
+      setCat(category);
+      reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  async function saveEdit(id: string) {
+    try {
+      await api('/api/ref/' + id, { method: 'PUT', body: { label: editLabel } });
+      setEditId(null);
+      reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
   async function remove(id: string) {
     try {
       await api('/api/ref/' + id, { method: 'DELETE' });
@@ -101,10 +137,23 @@ function RefAdmin() {
 
   return (
     <div className="card">
-      <h2 className="text-base mb-1">Admin — Référentiel (base de données)</h2>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-base">Admin — Référentiel (base de données)</h2>
+        <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>Importer CSV</button>
+      </div>
       <p className="text-white/40 text-xs mb-4">
         Les valeurs qui pré-remplissent les formulaires (Collection, POS…).
       </p>
+
+      {showImport && (
+        <div className="border border-white/10 rounded p-3 mb-4 space-y-2">
+          <div className="text-xs text-white/50">Import d'une liste (colonnes reconnues : <span className="font-mono">code</span> et/ou <span className="font-mono">label</span> ; code = libellé si absent)</div>
+          <input className="field" placeholder="Catégorie (ex. ateliers, suppliers, animalTypes…)" value={impCat || cat} onChange={(e) => setImpCat(e.target.value)} />
+          <input type="file" accept=".csv,text/csv" className="text-xs" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(setImpCsv); }} />
+          <textarea className="field font-mono text-[11px]" rows={3} placeholder="code;label  (ou label seul)" value={impCsv} onChange={(e) => setImpCsv(e.target.value)} />
+          <button className="btn" onClick={runImport}>Importer</button>
+        </div>
+      )}
 
       <label className="block text-xs font-semibold mb-1">Catégorie</label>
       <select className="field mb-4" value={cat} onChange={(e) => setCat(e.target.value)}>
@@ -143,11 +192,25 @@ function RefAdmin() {
           {items.map((it) => (
             <tr key={it.id} className="border-t border-white/10">
               <td className="py-1.5 font-mono">{it.code}</td>
-              <td className="py-1.5">{it.label}</td>
-              <td className="py-1.5 text-right">
-                <button className="text-red-400/70 hover:text-red-400" onClick={() => remove(it.id)} title="Supprimer">
-                  ✕
-                </button>
+              <td className="py-1.5">
+                {editId === it.id ? (
+                  <input className="field py-1" value={editLabel} onChange={(e) => setEditLabel(e.target.value)} autoFocus />
+                ) : (
+                  it.label
+                )}
+              </td>
+              <td className="py-1.5 text-right whitespace-nowrap">
+                {editId === it.id ? (
+                  <>
+                    <button className="text-azure text-xs mr-2" onClick={() => saveEdit(it.id)}>OK</button>
+                    <button className="text-white/40 text-xs" onClick={() => setEditId(null)}>✕</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="text-azure text-xs mr-3" onClick={() => { setEditId(it.id); setEditLabel(it.label); }}>Modifier</button>
+                    <button className="text-red-400/70 hover:text-red-400" onClick={() => remove(it.id)} title="Supprimer">✕</button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

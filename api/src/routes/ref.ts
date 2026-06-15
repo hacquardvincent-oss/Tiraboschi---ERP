@@ -1,9 +1,21 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { importRefCsv } from '../services/import';
 
 export const refRouter = Router();
 refRouter.use(requireAuth);
+
+// Import CSV d'une catégorie de référentiel (Admin)
+refRouter.post('/import', requireRole('ADMIN'), async (req, res) => {
+  const { category, csv } = req.body ?? {};
+  if (!category || typeof csv !== 'string') return res.status(400).json({ error: 'category et csv requis.' });
+  try {
+    res.json(await importRefCsv(category, csv));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
 
 /** Catégories distinctes du référentiel. */
 refRouter.get('/categories', async (_req, res) => {

@@ -77,9 +77,21 @@ export interface ImportResult {
  * Importe / met à jour la collection depuis des lignes CSV (formats app_base_v3 ou Import_Shopify).
  * Idempotent : upsert par SKU. Met à jour le prix (USD) sans écraser le reste si la fiche existe.
  */
+/** Upsert d'une entrée référentiel par (category, code). */
+async function upsertRef(category: string, code: string, label: string) {
+  if (!code || !label) return;
+  await prisma.refItem.upsert({
+    where: { category_code: { category, code } },
+    create: { category, code, label },
+    update: { label },
+  });
+}
+
 export async function importCatalogCsv(text: string): Promise<ImportResult> {
   const rows = parseCsv(text);
   const res: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+  // Dérive les listes déroulantes (modèles, matières, couleurs) depuis la collection.
+  const refs = { models: new Map<string, string>(), materials: new Map<string, string>(), colors: new Map<string, string>() };
   for (const row of rows) {
     const sku = col(row, 'variant sku', 'sku');
     if (!sku) {
@@ -90,6 +102,12 @@ export async function importCatalogCsv(text: string): Promise<ImportResult> {
     const priceRaw = col(row, 'prix ht', 'variant price / united states', 'variant price', 'prix');
     const priceHtUsd = priceRaw ? Number(priceRaw.replace(/[^0-9.,]/g, '').replace(',', '.')) : undefined;
     const codes = parseSku(sku);
+    const modeleLabel = col(row, 'modèle', 'modele');
+    const matiereLabel = col(row, 'matière', 'matiere');
+    const couleurLabel = col(row, 'couleur');
+    if (codes.modelCode && modeleLabel) refs.models.set(codes.modelCode, modeleLabel);
+    if (codes.materialCode && matiereLabel) refs.materials.set(codes.materialCode, matiereLabel);
+    if (codes.colorCode && couleurLabel) refs.colors.set(codes.colorCode, couleurLabel);
     try {
       const existing = await prisma.product.findUnique({ where: { sku } });
       if (existing) {
@@ -112,6 +130,35 @@ export async function importCatalogCsv(text: string): Promise<ImportResult> {
       }
     } catch (e) {
       res.errors.push(`${sku}: ${(e as Error).message}`);
+    }
+  }
+  for (const [code, label] of refs.models) await upsertRef('models', code, label);
+  for (const [code, label] of refs.materials) await upsertRef('materials', code, label);
+  for (const [code, label] of refs.colors) await upsertRef('colors', code, label);
+  return res;
+}
+
+/**
+ * Importe une liste de référentiel (une catégorie) depuis un CSV.
+ * Colonnes reconnues : code/id (optionnel) + label/nom/libellé. Code auto = label si absent.
+ * Idempotent : upsert par (category, code).
+ */
+export async function importRefCsv(category: string, text: string): Promise<ImportResult> {
+  const rows = parseCsv(text);
+  const res: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+  for (const row of rows) {
+    const label = col(row, 'label', 'libellé', 'libelle', 'nom', 'name');
+    const code = col(row, 'code', 'id') || label;
+    if (!code || !label) {
+      res.skipped++;
+      continue;
+    }
+    try {
+      const existing = await prisma.refItem.findUnique({ where: { category_code: { category, code } } });
+      await upsertRef(category, code, label);
+      existing ? res.updated++ : res.created++;
+    } catch (e) {
+      res.errors.push(`${code}: ${(e as Error).message}`);
     }
   }
   return res;
