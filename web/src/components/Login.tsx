@@ -27,7 +27,7 @@ export function Login() {
   return (
     <div className="min-h-full flex items-center justify-center p-4">
       <form onSubmit={submit} className="card w-full max-w-sm">
-        <div className="mb-6 mt-2">
+        <div className="mb-6 mt-2 flex justify-center">
           <Logo />
         </div>
         <label className="text-xs font-semibold">{t('login.email')}</label>
