@@ -117,6 +117,29 @@ export function Collection() {
   const [saving, setSaving] = useState(false);
   const [listMode, setListMode] = useState<'edit' | 'avail'>('edit');
   const [catalog, setCatalog] = useState<Avail[] | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
+
+  async function runImport() {
+    if (!csvText.trim()) return setImportMsg('Colle un CSV ou choisis un fichier.');
+    setImporting(true);
+    setImportMsg('');
+    try {
+      const r = await api<{ created: number; updated: number; skipped: number; errors: string[] }>(
+        '/api/products/import',
+        { method: 'POST', body: { csv: csvText } },
+      );
+      setImportMsg(`${r.created} créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s)${r.errors.length ? `, ${r.errors.length} erreur(s)` : ''}.`);
+      setCsvText('');
+      load(q);
+    } catch (e) {
+      setImportMsg((e as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const load = (query = '') =>
     api<Product[]>('/api/products' + (query ? '?q=' + encodeURIComponent(query) : ''))
@@ -260,9 +283,32 @@ export function Collection() {
     <div className="card">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base">Collection</h2>
-        <button className="btn" onClick={newSheet}>+ Nouveau modèle</button>
+        <div className="flex gap-2">
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>Importer CSV</button>
+          <button className="btn" onClick={newSheet}>+ Nouveau modèle</button>
+        </div>
       </div>
       <div className="text-xs text-white/40 mb-3">{validated} modèle(s) validé(s) · {products.length} déclinaison(s)</div>
+
+      {showImport && (
+        <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
+          <div className="text-xs text-white/50">Import collection (formats app_base / Import Shopify ; upsert par SKU)</div>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="text-xs"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) f.text().then(setCsvText);
+            }}
+          />
+          <textarea className="field font-mono text-[11px]" rows={4} placeholder="…ou colle le CSV ici (Modèle;Matière;Option;Couleur;Nom;SKU;Prix HT $)" value={csvText} onChange={(e) => setCsvText(e.target.value)} />
+          <div className="flex items-center gap-3">
+            <button className="btn" onClick={runImport} disabled={importing}>{importing ? 'Import…' : 'Importer'}</button>
+            {importMsg && <span className="text-xs text-white/70">{importMsg}</span>}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-3 text-sm">
         <button className={'px-3 py-1 rounded border ' + (listMode === 'edit' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setListMode('edit')}>Édition</button>

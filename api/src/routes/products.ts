@@ -4,6 +4,7 @@ import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { assembleSku } from '../services/sku';
 import { syncProductToShopify } from '../services/shopify';
+import { importCatalogCsv } from '../services/import';
 import { computeAvailability } from '../services/atp';
 
 export const productsRouter = Router();
@@ -98,6 +99,17 @@ productsRouter.get('/:id/availability', async (req, res) => {
   const a = await computeAvailability(req.params.id, qty);
   if (!a) return res.status(404).json({ error: 'Fiche introuvable.' });
   res.json(a);
+});
+
+// Import CSV de la collection (app_base_v3 / Import_Shopify) — upsert par SKU, idempotent
+productsRouter.post('/import', async (req, res) => {
+  const csv = (req.body ?? {}).csv;
+  if (typeof csv !== 'string' || csv.trim().length === 0) return res.status(400).json({ error: 'csv requis.' });
+  try {
+    res.json(await importCatalogCsv(csv));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
 });
 
 productsRouter.post('/', async (req, res) => {
