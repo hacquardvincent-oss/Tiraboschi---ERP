@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNav } from '../nav';
 import { useToast } from '../toast';
-import { Thumb } from '../components/ui';
+import { Thumb, Button } from '../components/ui';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
 import { chargeOnReader } from '../lib/terminal';
@@ -74,6 +74,7 @@ export function Pos() {
   const setErr = (m: string) => { if (m) toast(m, 'error'); }; // erreurs → toast
   const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe'>('');
   const [saved, setSaved] = useState<SavedSale | null>(null);
+  const [clientOpen, setClientOpen] = useState(true);
   const [payLink, setPayLink] = useState('');
   const [tpeStatus, setTpeStatus] = useState('');
 
@@ -343,8 +344,11 @@ export function Pos() {
 
       {/* Client */}
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Client</div>
-        <div className="grid grid-cols-2 gap-3">
+        <button className="w-full flex items-center justify-between mb-2" onClick={() => setClientOpen(!clientOpen)}>
+          <span className="text-xs uppercase tracking-editorial text-white/50">Client {customer.email && <span className="text-white/40 normal-case tracking-normal">· {customer.email}</span>}</span>
+          <span className="text-white/40 text-xs">{clientOpen ? '▾' : '▸'}</span>
+        </button>
+        <div className={'grid grid-cols-2 gap-3 ' + (clientOpen ? '' : 'hidden')}>
           <input className="field" placeholder="Prénom" value={customer.firstName} onChange={(e) => setC({ firstName: e.target.value })} />
           <input className="field" placeholder="Nom" value={customer.lastName} onChange={(e) => setC({ lastName: e.target.value })} />
           <input className="field col-span-2" type="email" placeholder="Email (obligatoire pour le reçu)" value={customer.email} onChange={(e) => setC({ email: e.target.value })} />
@@ -370,7 +374,7 @@ export function Pos() {
           </select>
           <textarea className="field col-span-2" rows={2} placeholder="Notes sur le client (goûts…)" value={customer.note} onChange={(e) => setC({ note: e.target.value })} />
         </div>
-        <div className="flex gap-4 mt-2 text-xs text-white/70">
+        <div className={'flex gap-4 mt-2 text-xs text-white/70 ' + (clientOpen ? '' : 'hidden')}>
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={customer.acceptsEmail} onChange={(e) => setC({ acceptsEmail: e.target.checked })} /> Marketing email
           </label>
@@ -482,47 +486,55 @@ export function Pos() {
         </div>
       </div>
 
-      {/* Encaissement */}
-      <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Encaissement</div>
-        <button className="btn w-full" onClick={onSave} disabled={busy !== '' || cart.length === 0}>
-          {busy === 'save' ? 'Enregistrement…' : saved ? `Commande enregistrée (${saved.reference})` : 'Enregistrer la commande'}
-        </button>
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <button className="btn" onClick={onTpe} disabled={busy !== '' || cart.length === 0}>
-            {busy === 'tpe' ? 'TPE…' : 'TPE Stripe S710'}
-          </button>
-          <button className="btn" onClick={onPaymentLink} disabled={busy !== '' || cart.length === 0}>
-            {busy === 'link' ? 'Génération…' : 'Lien de paiement'}
-          </button>
-        </div>
-
-        {tpeStatus && <p className="text-azure text-sm mt-3">{tpeStatus}</p>}
-
-        {payLink && (
-          <div className="mt-3 space-y-2">
-            <div className="text-xs uppercase tracking-editorial text-white/50">Lien de paiement</div>
-            <input className="field text-xs" readOnly value={payLink} onFocus={(e) => e.currentTarget.select()} />
-            <div className="flex gap-2">
-              <button className="btn flex-1" onClick={() => navigator.clipboard?.writeText(payLink)}>📋 Copier</button>
-              <button className="btn flex-1" onClick={shareWhatsapp}>💬 WhatsApp</button>
+      {/* Suivi encaissement (statut TPE, lien généré, nouvelle vente) */}
+      {(tpeStatus || payLink || saved) && (
+        <div className="card">
+          {saved && !payLink && !tpeStatus && (
+            <p className="text-green-400/80 text-sm">Commande enregistrée ({saved.reference}).</p>
+          )}
+          {tpeStatus && <p className="text-azure text-sm">{tpeStatus}</p>}
+          {payLink && (
+            <div className="mt-1 space-y-2">
+              <div className="text-xs uppercase tracking-editorial text-white/50">Lien de paiement</div>
+              <input className="field text-xs" readOnly value={payLink} onFocus={(e) => e.currentTarget.select()} />
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={() => navigator.clipboard?.writeText(payLink)}>📋 Copier</Button>
+                <Button variant="secondary" className="flex-1" onClick={shareWhatsapp}>💬 WhatsApp</Button>
+              </div>
+              <p className="text-white/40 text-[11px]">
+                Dès que le client paie, la commande Shopify est créée automatiquement (suivi dans <b>Ventes</b>).
+              </p>
             </div>
-            <p className="text-white/40 text-[11px]">
-              Dès que le client paie, la commande Shopify est créée automatiquement (suivi dans <b>Ventes</b>).
-            </p>
+          )}
+          {saved && (
+            <button className="text-gold text-sm mt-3" onClick={newSale}>+ Nouvelle vente</button>
+          )}
+        </div>
+      )}
+
+      {/* Barre d'encaissement collante */}
+      <div className="sticky z-20" style={{ bottom: 80 }}>
+        <div className="card border-gold/30 flex items-center gap-3 shadow-lg">
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-editorial text-white/40">
+              Total {currency === 'EUR' ? 'TTC' : 'taxes comprises'}
+            </div>
+            <div className="text-xl font-semibold text-gold leading-none">{fmt(total)}</div>
+            {cartAvail && cart.length > 0 && cartAvail.readyDate && (
+              <div className="text-[11px] text-white/40 mt-0.5">Livrable ~{fmtDate(cartAvail.readyDate)}</div>
+            )}
           </div>
-        )}
-
-        {saved && (
-          <button className="text-azure text-sm mt-3" onClick={newSale}>+ Nouvelle vente</button>
-        )}
-
-        <p className="text-white/40 text-[11px] mt-2">
-          La commande est enregistrée (durable) avant tout encaissement. Paiement Stripe (lien ou TPE
-          S710) → commande Shopify créée automatiquement, avec retries — impossible à perdre.
-        </p>
+          <Button variant="secondary" onClick={onSave} loading={busy === 'save'} disabled={busy !== '' || cart.length === 0} title="Enregistrer sans encaisser">
+            Enreg.
+          </Button>
+          <Button variant="secondary" onClick={onPaymentLink} loading={busy === 'link'} disabled={busy !== '' || cart.length === 0}>
+            Lien
+          </Button>
+          <Button variant="primary" className="px-5 py-3" onClick={onTpe} loading={busy === 'tpe'} disabled={busy !== '' || cart.length === 0}>
+            Encaisser TPE
+          </Button>
+        </div>
       </div>
-
     </div>
   );
 }
