@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { assembleSku, deriveYearId, deriveSeasonId } from '../services/sku';
 import { pickingList, issueMaterials, receiveFinishedPieces } from '../services/fulfillment';
+import { createPOsFromSuggestions, receivePO } from '../services/purchasing';
 
 export const erpRouter = Router();
 erpRouter.use(requireAuth);
@@ -350,6 +351,64 @@ erpRouter.get('/reorder-suggestions', async (_req, res) => {
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
   res.json(sugg);
+});
+
+// ─── Bons de commande fournisseur (achats matières) ──────────────────────────
+erpRouter.get('/purchase-orders', async (_req, res) => {
+  res.json(
+    await prisma.purchaseOrder.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: { supplier: true, lines: { include: { material: true } } },
+    }),
+  );
+});
+
+// Création manuelle : { supplierId, lines:[{ materialId, quantity, unitCost }], status? }
+erpRouter.post('/purchase-orders', async (req, res) => {
+  const b = req.body ?? {};
+  const lines: { materialId?: string; quantity?: unknown; unitCost?: unknown }[] = Array.isArray(b.lines) ? b.lines : [];
+  if (!b.supplierId) return res.status(400).json({ error: 'supplierId requis.' });
+  try {
+    res.status(201).json(
+      await prisma.purchaseOrder.create({
+        data: {
+          reference: 'PO-' + Date.now(),
+          supplierId: b.supplierId,
+          status: b.status === 'SENT' ? 'SENT' : 'DRAFT',
+          lines: {
+            create: lines
+              .filter((l) => l.materialId && l.quantity)
+              .map((l) => ({ materialId: l.materialId as string, quantity: l.quantity as never, unitCost: (l.unitCost ?? 0) as never })),
+          },
+        },
+        include: { supplier: true, lines: { include: { material: true } } },
+      }),
+    );
+  } catch (e) { fail(res, e); }
+});
+
+// Génération auto depuis les matières sous le seuil (regroupées par fournisseur)
+erpRouter.post('/purchase-orders/from-suggestions', async (_req, res) => {
+  try {
+    const created = await createPOsFromSuggestions();
+    res.json({ created: created.length, purchaseOrders: created });
+  } catch (e) { fail(res, e); }
+});
+
+erpRouter.patch('/purchase-orders/:id', async (req, res) => {
+  const { status } = req.body ?? {};
+  try {
+    res.json(await prisma.purchaseOrder.update({ where: { id: req.params.id }, data: { status, orderedAt: status === 'SENT' ? new Date() : undefined } }));
+  } catch (e) { fail(res, e); }
+});
+
+// Réception → bon de réception + entrée en stock (RECEIPT_IN)
+erpRouter.post('/purchase-orders/:id/receive', async (req, res) => {
+  try {
+    const receipt = await receivePO(req.params.id, req.user?.sub);
+    res.json(receipt);
+  } catch (e) { fail(res, e); }
 });
 
 // ─── Stock pièces finies (réceptions) ─────────────────────────────────────────

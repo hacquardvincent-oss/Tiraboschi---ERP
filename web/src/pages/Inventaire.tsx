@@ -93,6 +93,26 @@ interface ReorderSuggestion {
   supplier: string | null;
   suggestedQty: number;
 }
+interface POLine {
+  id: string;
+  quantity: string;
+  unitCost: string;
+  material: { code: string; name: string; unit: string };
+}
+interface PurchaseOrder {
+  id: string;
+  reference: string;
+  status: 'DRAFT' | 'SENT' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CANCELLED';
+  supplier?: { name: string } | null;
+  lines: POLine[];
+}
+const PO_STATUS_FR: Record<string, string> = {
+  DRAFT: 'Brouillon',
+  SENT: 'Envoyé',
+  PARTIALLY_RECEIVED: 'Partiel',
+  RECEIVED: 'Reçu',
+  CANCELLED: 'Annulé',
+};
 
 interface Capability {
   modelCode: string;
@@ -459,10 +479,12 @@ function ProductionTab({ onErr }: { onErr: (s: string) => void }) {
 function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
   const [plan, setPlan] = useState<PlanGroup[]>([]);
   const [reorder, setReorder] = useState<ReorderSuggestion[]>([]);
+  const [pos, setPos] = useState<PurchaseOrder[]>([]);
 
   const reload = () => {
     api<PlanGroup[]>('/api/erp/planning').then(setPlan).catch((e) => onErr((e as Error).message));
     api<ReorderSuggestion[]>('/api/erp/reorder-suggestions').then(setReorder).catch(() => {});
+    api<PurchaseOrder[]>('/api/erp/purchase-orders').then(setPos).catch(() => {});
   };
   useEffect(() => {
     reload();
@@ -478,6 +500,35 @@ function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
       onErr((e as Error).message);
     }
   }
+
+  async function genPOs() {
+    try {
+      const r = await api<{ created: number }>('/api/erp/purchase-orders/from-suggestions', { method: 'POST', body: {} });
+      onErr(r.created > 0 ? `${r.created} bon(s) de commande créé(s).` : 'Aucun nouveau BC (déjà ouverts ou pas de fournisseur).');
+      reload();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  async function setPoStatus(id: string, status: string) {
+    try {
+      await api('/api/erp/purchase-orders/' + id, { method: 'PATCH', body: { status } });
+      reload();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  async function receivePo(id: string) {
+    try {
+      await api(`/api/erp/purchase-orders/${id}/receive`, { method: 'POST', body: {} });
+      onErr('Réceptionné → matières entrées en stock.');
+      reload();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  const poTotal = (po: PurchaseOrder) =>
+    po.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.unitCost), 0);
 
   return (
     <>
@@ -523,6 +574,34 @@ function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
               <div className="text-white/50 text-[11px]">Stock {r.stock} / seuil {r.threshold} {r.unit} · {r.supplier ?? 'fournisseur ?'}</div>
             </div>
             <span className="text-azure text-xs">commander ~{r.suggestedQty} {r.unit}</span>
+          </div>
+        ))}
+        {reorder.length > 0 && (
+          <button className="btn w-full mt-3" onClick={genPOs}>Générer les bons de commande</button>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Bons de commande fournisseur</div>
+        {pos.length === 0 && <p className="text-white/40 text-sm">Aucun bon de commande.</p>}
+        {pos.map((po) => (
+          <div key={po.id} className="border-b border-white/10 py-2">
+            <div className="flex items-center justify-between text-sm">
+              <div>
+                <div className="font-mono text-xs text-azure">{po.reference}</div>
+                <div className="text-white/50 text-xs">{po.supplier?.name ?? '—'} · {po.lines.length} ligne(s) · {poTotal(po).toFixed(2)} €</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/10 text-white/60">{PO_STATUS_FR[po.status]}</span>
+                {po.status === 'DRAFT' && <button className="text-azure text-xs" onClick={() => setPoStatus(po.id, 'SENT')}>Envoyer</button>}
+                {(po.status === 'DRAFT' || po.status === 'SENT') && <button className="text-green-300 text-xs" onClick={() => receivePo(po.id)}>Réceptionner</button>}
+              </div>
+            </div>
+            <div className="ml-1 mt-1">
+              {po.lines.map((l) => (
+                <div key={l.id} className="text-[11px] text-white/40">{l.material.code} — {l.material.name} · {Number(l.quantity)} {l.material.unit} × {Number(l.unitCost).toFixed(2)} €</div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
