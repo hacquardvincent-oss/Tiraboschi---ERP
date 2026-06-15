@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { createSale, markSalePaid, syncSale } from '../services/sales';
+import { calculateTax } from '../services/shopify';
 import {
   createPaymentLink,
   createTerminalConnectionToken,
@@ -11,6 +12,34 @@ import {
 
 export const salesRouter = Router();
 salesRouter.use(requireAuth);
+
+// Calcul de la taxe réelle via Shopify (par juridiction) pour une adresse client
+salesRouter.post('/tax-quote', async (req, res) => {
+  const b = req.body ?? {};
+  const items: { title?: string; priceCents?: number; qty?: number }[] = Array.isArray(b.items) ? b.items : [];
+  if (items.length === 0) return res.status(400).json({ error: 'items requis.' });
+  if (!b.address?.countryCode) return res.status(400).json({ error: 'Adresse (pays) requise.' });
+  try {
+    const quote = await calculateTax({
+      currency: b.currency ?? 'USD',
+      lineItems: items.map((i) => ({
+        title: i.title ?? 'Article',
+        unitPrice: ((i.priceCents ?? 0) / 100).toFixed(2),
+        quantity: i.qty ?? 1,
+      })),
+      address: {
+        countryCode: b.address.countryCode,
+        provinceCode: b.address.provinceCode,
+        zip: b.address.zip,
+        city: b.address.city,
+        address1: b.address.address1,
+      },
+    });
+    res.json(quote);
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
 
 salesRouter.get('/', async (_req, res) => {
   res.json(await prisma.sale.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }));

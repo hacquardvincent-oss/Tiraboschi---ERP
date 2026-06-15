@@ -285,6 +285,78 @@ export async function getReports(): Promise<DashboardReports> {
   };
 }
 
+// ─── POS : calcul de taxe réel via Shopify (draftOrderCalculate) ──────────────
+
+export interface TaxQuoteInput {
+  currency: string;
+  lineItems: { title: string; unitPrice: string; quantity: number }[];
+  address: { countryCode: string; provinceCode?: string; zip?: string; city?: string; address1?: string };
+}
+export interface TaxQuote {
+  totalTaxCents: number;
+  currency: string;
+  lines: { title: string; rate: number; amountCents: number }[];
+}
+
+interface DraftCalcResult {
+  draftOrderCalculate: {
+    calculatedDraftOrder: {
+      totalTaxSet: { shopMoney: { amount: string; currencyCode: string } } | null;
+      taxLines: { title: string; rate: number | null; priceSet: { shopMoney: { amount: string } } }[];
+    } | null;
+    userErrors: { field: string[] | null; message: string }[];
+  };
+}
+
+/**
+ * Calcule la taxe réelle (par juridiction) via Shopify pour une adresse de livraison,
+ * sans persister de commande. Renvoie le détail des taxes + total.
+ * Requiert que la taxe automatique soit configurée côté Shopify pour la destination.
+ */
+export async function calculateTax(input: TaxQuoteInput): Promise<TaxQuote> {
+  const mutation = `
+    mutation DraftCalc($input: DraftOrderInput!) {
+      draftOrderCalculate(input: $input) {
+        calculatedDraftOrder {
+          totalTaxSet { shopMoney { amount currencyCode } }
+          taxLines { title rate priceSet { shopMoney { amount } } }
+        }
+        userErrors { field message }
+      }
+    }`;
+  const draftInput = {
+    presentmentCurrencyCode: input.currency.toUpperCase(),
+    shippingAddress: {
+      countryCode: input.address.countryCode,
+      provinceCode: input.address.provinceCode || undefined,
+      zip: input.address.zip || undefined,
+      city: input.address.city || undefined,
+      address1: input.address.address1 || undefined,
+    },
+    lineItems: input.lineItems.map((l) => ({
+      title: l.title,
+      originalUnitPrice: l.unitPrice,
+      quantity: l.quantity,
+      requiresShipping: true,
+      taxable: true,
+    })),
+  };
+  const res = await shopifyGraphQL<DraftCalcResult>(mutation, { input: draftInput });
+  const errs = res.draftOrderCalculate.userErrors;
+  if (errs.length > 0) throw new Error(errs.map((e) => e.message).join(', '));
+  const calc = res.draftOrderCalculate.calculatedDraftOrder;
+  const toCents = (a: string) => Math.round(parseFloat(a) * 100);
+  return {
+    currency: calc?.totalTaxSet?.shopMoney.currencyCode ?? input.currency.toUpperCase(),
+    totalTaxCents: calc?.totalTaxSet ? toCents(calc.totalTaxSet.shopMoney.amount) : 0,
+    lines: (calc?.taxLines ?? []).map((t) => ({
+      title: t.title,
+      rate: t.rate ?? 0,
+      amountCents: toCents(t.priceSet.shopMoney.amount),
+    })),
+  };
+}
+
 // ─── PLM : synchronisation produit Shopify ───────────────────────────────────
 
 export interface ProductSyncInput {

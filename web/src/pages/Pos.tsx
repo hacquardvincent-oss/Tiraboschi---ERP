@@ -58,7 +58,10 @@ export function Pos() {
     note: '',
   };
   const [customer, setCustomer] = useState(emptyCustomer);
-  const setC = (patch: Partial<typeof emptyCustomer>) => setCustomer((c) => ({ ...c, ...patch }));
+  const setC = (patch: Partial<typeof emptyCustomer>) => {
+    setCustomer((c) => ({ ...c, ...patch }));
+    setTaxQuote(null); // l'adresse change → la taxe calculée n'est plus valable
+  };
   const [usTaxRate, setUsTaxRate] = useState('8'); // estimation, % (la taxe exacte sera calculée par Shopify à l'encaissement)
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
@@ -69,6 +72,8 @@ export function Pos() {
   const [tpeStatus, setTpeStatus] = useState('');
 
   const [cartAvail, setCartAvail] = useState<{ readyDate: string | null; lines: CartAvailLine[] } | null>(null);
+  const [taxQuote, setTaxQuote] = useState<{ totalTaxCents: number; currency: string; lines: { title: string; rate: number; amountCents: number }[] } | null>(null);
+  const [taxBusy, setTaxBusy] = useState(false);
 
   useEffect(() => {
     const cat = cart.filter((l) => l.id);
@@ -99,7 +104,41 @@ export function Pos() {
     setSaved(null);
     setPayLink('');
     setTpeStatus('');
+    setTaxQuote(null);
   };
+
+  async function computeTax() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    if (!customer.country) return setErr('Pays du client requis pour le calcul des taxes.');
+    setTaxBusy(true);
+    setErr('');
+    try {
+      const q = await api<{ totalTaxCents: number; currency: string; lines: { title: string; rate: number; amountCents: number }[] }>(
+        '/api/pos/sales/tax-quote',
+        {
+          method: 'POST',
+          body: {
+            currency,
+            items: cart.map((l) => ({ title: l.name, priceCents: Math.round(l.unitHt * 100), qty: l.qty })),
+            address: {
+              countryCode: customer.country,
+              provinceCode: customer.province || undefined,
+              zip: customer.zip || undefined,
+              city: customer.city || undefined,
+              address1: customer.address1 || undefined,
+            },
+          },
+        },
+      );
+      setTaxQuote(q);
+      if (q.lines.length === 0) setErr('Shopify n’a renvoyé aucune taxe pour cette adresse (vérifier la config taxe Shopify).');
+    } catch (e) {
+      setErr((e as Error).message);
+      setTaxQuote(null);
+    } finally {
+      setTaxBusy(false);
+    }
+  }
 
   const add = (p: Product) => {
     setCart((c) => {
@@ -138,8 +177,9 @@ export function Pos() {
   const subtotal = cart.reduce((s, l) => s + l.unitHt * l.qty, 0);
   const ship = ddp ? parseFloat(shipping) || 0 : 0;
   const taxable = subtotal + ship;
-  const tax =
-    currency === 'EUR' ? subtotal * TVA_EUR : taxable * ((parseFloat(usTaxRate) || 0) / 100);
+  const estTax = currency === 'EUR' ? subtotal * TVA_EUR : taxable * ((parseFloat(usTaxRate) || 0) / 100);
+  // Taxe réelle Shopify si calculée, sinon estimation.
+  const tax = taxQuote ? taxQuote.totalTaxCents / 100 : estTax;
   const total = subtotal + ship + tax;
 
   const sym = currency === 'EUR' ? '€' : '$';
@@ -169,13 +209,15 @@ export function Pos() {
       priceCents: Math.round(l.unitHt * 100),
       qty: l.qty,
     }));
-    const taxLines = [
-      {
-        title: currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)',
-        rate: currency === 'EUR' ? 0.2 : (parseFloat(usTaxRate) || 0) / 100,
-        amountCents: Math.round(tax * 100),
-      },
-    ];
+    const taxLines = taxQuote
+      ? taxQuote.lines.map((t) => ({ title: t.title, rate: t.rate, amountCents: t.amountCents }))
+      : [
+          {
+            title: currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)',
+            rate: currency === 'EUR' ? 0.2 : (parseFloat(usTaxRate) || 0) / 100,
+            amountCents: Math.round(tax * 100),
+          },
+        ];
     const market: 'FR' | 'US' = currency === 'EUR' ? 'FR' : 'US';
     const sale = await api<{ id: string; reference: string }>('/api/pos/sales', {
       method: 'POST',
@@ -375,16 +417,25 @@ export function Pos() {
                 Port <input className="field w-20 py-1" value={shipping} onChange={(e) => setShipping(e.target.value)} />
               </span>
             )}
-            <span className="flex items-center gap-1">
-              Sales tax % (est.) <input className="field w-16 py-1" value={usTaxRate} onChange={(e) => setUsTaxRate(e.target.value)} />
-            </span>
+            {!taxQuote && (
+              <span className="flex items-center gap-1">
+                Sales tax % (est.) <input className="field w-16 py-1" value={usTaxRate} onChange={(e) => setUsTaxRate(e.target.value)} />
+              </span>
+            )}
+            <button className="px-2 py-1 rounded border border-azure text-azure" onClick={computeTax} disabled={taxBusy}>
+              {taxBusy ? 'Calcul…' : 'Calculer la taxe (Shopify)'}
+            </button>
           </div>
         )}
 
         <div className="mt-3 text-sm space-y-1">
           <Row label="Sous-total HT" value={fmt(subtotal)} />
           {ddp && <Row label="Frais de port (DDP)" value={fmt(ship)} />}
-          <Row label={currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)'} value={fmt(tax)} />
+          {taxQuote
+            ? taxQuote.lines.map((t, i) => (
+                <Row key={i} label={`${t.title}${t.rate ? ' (' + (t.rate * 100).toFixed(2) + '%)' : ''}`} value={fmt(t.amountCents / 100)} />
+              ))
+            : <Row label={currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)'} value={fmt(tax)} />}
           <div className="flex justify-between font-semibold text-azure pt-1 border-t border-white/10">
             <span>Total {currency === 'EUR' ? 'TTC' : 'taxes comprises'}</span>
             <span>{fmt(total)}</span>
@@ -397,11 +448,12 @@ export function Pos() {
               </span>
             </div>
           )}
-          {currency === 'USD' && (
+          {currency === 'USD' && !taxQuote && (
             <p className="text-white/40 text-[11px]">
-              Taxe estimée pour l'affichage. La taxe exacte par destination sera calculée par Shopify à l'encaissement.
+              Taxe estimée. Clique « Calculer la taxe (Shopify) » après avoir saisi l'adresse pour le détail exact par juridiction.
             </p>
           )}
+          {taxQuote && <p className="text-green-400/70 text-[11px]">Taxe réelle calculée par Shopify pour l'adresse saisie.</p>}
         </div>
       </div>
 
