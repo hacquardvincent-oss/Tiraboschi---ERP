@@ -122,3 +122,77 @@ erpRouter.post('/stock-movements', async (req, res) => {
     res.status(201).json(mv);
   } catch (e) { fail(res, e); }
 });
+
+// ─── Synthèse OPS (dashboard + stock courant par matière + alertes) ───────────
+erpRouter.get('/summary', async (_req, res) => {
+  try {
+    const [materials, sums, productionCount, piecesAgg] = await Promise.all([
+      prisma.material.findMany({ orderBy: { code: 'asc' }, include: { supplier: true } }),
+      prisma.stockMovement.groupBy({ by: ['materialId'], _sum: { quantity: true } }),
+      prisma.productionOrder.count({
+        where: { status: { in: ['REQUESTED', 'MATERIALS_IN_TRANSIT', 'IN_PRODUCTION', 'QC'] } },
+      }),
+      prisma.finishedPieceReceipt.aggregate({ _sum: { quantity: true } }),
+    ]);
+    const stockByMat = new Map(sums.map((s) => [s.materialId, Number(s._sum.quantity ?? 0)]));
+    const withStock = materials.map((m) => {
+      const stock = stockByMat.get(m.id) ?? 0;
+      const threshold = m.reorderThreshold != null ? Number(m.reorderThreshold) : null;
+      return { ...m, stock, lowStock: stock <= 0 || (threshold != null && stock <= threshold) };
+    });
+    res.json({
+      materials: withStock,
+      alerts: withStock.filter((m) => m.lowStock),
+      productionCount,
+      piecesTotal: Number(piecesAgg._sum.quantity ?? 0),
+    });
+  } catch (e) { fail(res, e); }
+});
+
+// ─── Ordres de production ─────────────────────────────────────────────────────
+erpRouter.get('/production-orders', async (_req, res) => {
+  res.json(
+    await prisma.productionOrder.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: { workshop: true },
+    }),
+  );
+});
+
+erpRouter.post('/production-orders', async (req, res) => {
+  const { workshopId, variantSku, quantity, clientOrderRef, status } = req.body ?? {};
+  if (!workshopId || !variantSku) return res.status(400).json({ error: 'workshopId et variantSku requis.' });
+  try {
+    res.status(201).json(
+      await prisma.productionOrder.create({
+        data: {
+          reference: 'OP-' + Date.now(),
+          workshopId,
+          variantSku,
+          quantity: Number(quantity) || 1,
+          clientOrderRef: clientOrderRef || null,
+          status: status || 'REQUESTED',
+        },
+      }),
+    );
+  } catch (e) { fail(res, e); }
+});
+
+erpRouter.patch('/production-orders/:id', async (req, res) => {
+  const { status } = req.body ?? {};
+  try {
+    res.json(await prisma.productionOrder.update({ where: { id: req.params.id }, data: { status } }));
+  } catch (e) { fail(res, e); }
+});
+
+// ─── Stock pièces finies (réceptions) ─────────────────────────────────────────
+erpRouter.get('/finished-pieces', async (_req, res) => {
+  res.json(
+    await prisma.finishedPieceReceipt.findMany({
+      orderBy: { receivedAt: 'desc' },
+      take: 200,
+      include: { productionOrder: { include: { workshop: true } } },
+    }),
+  );
+});
