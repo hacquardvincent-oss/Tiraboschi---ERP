@@ -93,6 +93,7 @@ model Product {
 
   // Sync Shopify
   shopifyProductId String?
+  imageUrl         String? // visuel (CDN Shopify)
 
   bomLines  BomLine[]
   createdAt DateTime @default(now())

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNav } from '../nav';
 import { useToast } from '../toast';
+import { Thumb } from '../components/ui';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
 import { chargeOnReader } from '../lib/terminal';
@@ -11,6 +12,7 @@ interface Product {
   name: string;
   priceHtEur?: string | null;
   priceHtUsd?: string | null;
+  imageUrl?: string | null;
 }
 
 interface CartLine {
@@ -20,6 +22,7 @@ interface CartLine {
   name: string;
   unitHt: number; // prix HT unitaire dans la devise courante
   qty: number;
+  imageUrl?: string | null;
 }
 
 interface CartAvailLine {
@@ -165,7 +168,7 @@ export function Pos() {
         copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
         return copy;
       }
-      return [...c, { uid: p.id, id: p.id, sku: p.sku, name: p.name, unitHt: priceOf(p), qty: 1 }];
+      return [...c, { uid: p.id, id: p.id, sku: p.sku, name: p.name, unitHt: priceOf(p), qty: 1, imageUrl: p.imageUrl }];
     });
     setQ('');
     setResults([]);
@@ -387,9 +390,10 @@ export function Pos() {
         {results.length > 0 && (
           <div className="mt-2 border border-white/10 rounded divide-y divide-white/10">
             {results.map((p) => (
-              <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-white/5 flex justify-between" onClick={() => add(p)}>
-                <span><span className="font-mono text-azure">{p.sku}</span> — {p.name}</span>
-                <span>{fmt(priceOf(p))}</span>
+              <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center gap-3" onClick={() => add(p)}>
+                <Thumb src={p.imageUrl} alt={p.name} size={36} />
+                <span className="flex-1 min-w-0"><span className="font-mono text-azure">{p.sku}</span> — {p.name}</span>
+                <span className="shrink-0">{fmt(priceOf(p))}</span>
               </button>
             ))}
           </div>
@@ -408,10 +412,11 @@ export function Pos() {
         <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Panier</div>
         {cart.length === 0 && <p className="text-white/40 text-sm">Panier vide.</p>}
         {cart.map((l) => (
-          <div key={l.uid} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm">
-            <div className="flex-1">
+          <div key={l.uid} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm gap-2">
+            <Thumb src={l.imageUrl} alt={l.name} size={36} />
+            <div className="flex-1 min-w-0">
               <div className="font-mono text-azure text-xs">{l.sku || 'HORS CATALOGUE'}</div>
-              <div>{l.name}</div>
+              <div className="truncate">{l.name}</div>
               {(() => {
                 const a = l.sku ? cartAvail?.lines.find((x) => x.sku === l.sku) : null;
                 return a ? (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { RefSelect } from '../components/RefSelect';
-import { Tabs } from '../components/ui';
+import { Tabs, Thumb } from '../components/ui';
 import { useToast } from '../toast';
 
 interface Product {
@@ -14,6 +14,7 @@ interface Product {
   optionCode?: string | null;
   colorCode?: string | null;
   priceHtUsd?: string | null;
+  imageUrl?: string | null;
 }
 
 interface BomMaterial {
@@ -57,6 +58,7 @@ interface Avail {
   productId: string;
   sku: string;
   name: string;
+  imageUrl: string | null;
   inStock: number;
   buildableNow: number;
   path: 'stock' | 'production' | 'blocked';
@@ -125,6 +127,19 @@ export function Collection() {
   const [csvText, setCsvText] = useState('');
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState('');
+
+  async function importImages() {
+    setImporting(true);
+    try {
+      const r = await api<{ updated: number; shopifyImages: number }>('/api/products/import-images', { method: 'POST', body: {} });
+      toast(`${r.updated} visuel(s) importé(s) depuis Shopify.`, r.updated ? 'success' : 'info');
+      load(q);
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const [importKind, setImportKind] = useState<'catalog' | 'tech'>('catalog');
   async function runImport() {
@@ -293,6 +308,7 @@ export function Collection() {
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base">Collection</h2>
         <div className="flex gap-2">
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={importImages} disabled={importing}>Images Shopify</button>
           <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>Importer CSV</button>
           <button className="btn" onClick={newSheet}>+ Nouveau modèle</button>
         </div>
@@ -373,6 +389,7 @@ export function Collection() {
                         {decls.map((p) => (
                           <div key={p.id} className="flex items-center justify-between py-1 text-sm border-b border-white/5">
                             <div className="flex items-center gap-2">
+                              <Thumb src={p.imageUrl} alt={p.name} size={28} />
                               <span className="font-mono text-azure text-xs">{p.sku}</span>
                               <StatusBadge status={p.status} />
                             </div>
@@ -567,11 +584,15 @@ function CatalogAvail({ catalog }: { catalog: Avail[] | null }) {
             : `⚠ ${a.note ?? 'indisponible'}`;
         return (
           <div key={a.productId} className="py-1.5 border-b border-white/10">
-            <div className="flex items-center justify-between text-sm">
-              <div>
-                <span className="font-mono text-azure text-xs">{a.sku}</span> <span>{a.name}</span>
+            <div className="flex items-center justify-between text-sm gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Thumb src={a.imageUrl} alt={a.name} size={36} />
+                <div className="min-w-0">
+                  <div className="font-mono text-azure text-xs">{a.sku}</div>
+                  <div className="truncate">{a.name}</div>
+                </div>
               </div>
-              <span className={'text-xs ' + color}>{label}</span>
+              <span className={'text-xs text-right shrink-0 ' + color}>{label}</span>
             </div>
             {a.materialShort.length > 0 && (
               <div className="text-[11px] text-amber-400/80">

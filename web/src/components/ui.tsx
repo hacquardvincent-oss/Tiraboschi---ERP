@@ -70,6 +70,25 @@ export function SectionTitle({ children }: { children: ReactNode }) {
   return <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{children}</div>;
 }
 
+// ─── Vignette produit (image ou placeholder) ─────────────────────────────────
+export function Thumb({ src, alt = '', size = 40 }: { src?: string | null; alt?: string; size?: number }) {
+  if (!src)
+    return (
+      <div className="rounded bg-white/5 flex items-center justify-center text-gold/40 shrink-0" style={{ width: size, height: size }}>
+        ◇
+      </div>
+    );
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className="rounded object-cover bg-white/5 shrink-0"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 export function Tabs<T extends string>({ tabs, active, onChange }: { tabs: [T, string][]; active: T; onChange: (t: T) => void }) {
   return (

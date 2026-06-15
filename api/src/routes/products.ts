@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { assembleSku } from '../services/sku';
-import { syncProductToShopify } from '../services/shopify';
+import { syncProductToShopify, fetchProductImagesBySku } from '../services/shopify';
 import { importCatalogCsv, importTechSheetsCsv } from '../services/import';
 import { computeAvailability } from '../services/atp';
 
@@ -109,6 +109,25 @@ productsRouter.post('/import', async (req, res) => {
     res.json(await importCatalogCsv(csv));
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+// Backfill des visuels produits depuis Shopify (par SKU)
+productsRouter.post('/import-images', async (_req, res) => {
+  try {
+    const map = await fetchProductImagesBySku();
+    const products = await prisma.product.findMany({ select: { id: true, sku: true } });
+    let updated = 0;
+    for (const p of products) {
+      const url = map.get(p.sku);
+      if (url) {
+        await prisma.product.update({ where: { id: p.id }, data: { imageUrl: url } });
+        updated++;
+      }
+    }
+    res.json({ updated, shopifyImages: map.size });
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
   }
 });
 

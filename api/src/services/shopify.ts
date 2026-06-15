@@ -285,6 +285,36 @@ export async function getReports(): Promise<DashboardReports> {
   };
 }
 
+// ─── Backfill des visuels produits depuis Shopify (par SKU de variante) ───────
+interface ProductsImagesResult {
+  products: {
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    nodes: { featuredImage: { url: string } | null; variants: { nodes: { sku: string | null }[] } }[];
+  };
+}
+/** Construit une map SKU → URL d'image (image principale du produit Shopify). */
+export async function fetchProductImagesBySku(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  let cursor: string | null = null;
+  for (let i = 0; i < 30; i++) {
+    const query = `query($cursor: String) {
+      products(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { featuredImage { url } variants(first: 100) { nodes { sku } } }
+      }
+    }`;
+    const d: ProductsImagesResult = await shopifyGraphQL<ProductsImagesResult>(query, { cursor });
+    for (const p of d.products.nodes) {
+      const url = p.featuredImage?.url;
+      if (!url) continue;
+      for (const v of p.variants.nodes) if (v.sku) map.set(v.sku, url);
+    }
+    if (!d.products.pageInfo.hasNextPage) break;
+    cursor = d.products.pageInfo.endCursor;
+  }
+  return map;
+}
+
 // ─── Annulation d'une commande Shopify (best-effort) ──────────────────────────
 interface OrderCancelResult {
   orderCancel: { userErrors: { message: string }[] } | null;

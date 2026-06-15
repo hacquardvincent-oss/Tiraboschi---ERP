@@ -17,6 +17,7 @@ export interface Availability {
   productId: string;
   sku: string;
   name: string;
+  imageUrl: string | null;
   qty: number;
   inStock: number; // pièces finies disponibles
   buildableNow: number; // nb fabriquable avec le stock matière courant
@@ -45,6 +46,7 @@ interface ProductLite {
   id: string;
   sku: string;
   name: string;
+  imageUrl: string | null;
   modelCode: string | null;
   bomLines: BomLineLite[];
 }
@@ -113,7 +115,7 @@ function availabilityFor(p: ProductLite, qty: number, ctx: AtpContext): Availabi
   // Chemin stock
   if (inStock >= qty) {
     return {
-      productId: p.id, sku: p.sku, name: p.name, qty,
+      productId: p.id, sku: p.sku, name: p.name, imageUrl: p.imageUrl, qty,
       inStock, buildableNow, path: 'stock',
       readyDate: iso(addDays(today, DEFAULT_CLIENT_TRANSIT)),
       leadDays: DEFAULT_CLIENT_TRANSIT, workshop: null, materialShort: [],
@@ -124,7 +126,7 @@ function availabilityFor(p: ProductLite, qty: number, ctx: AtpContext): Availabi
   // Chemin production
   if (!best) {
     return {
-      productId: p.id, sku: p.sku, name: p.name, qty,
+      productId: p.id, sku: p.sku, name: p.name, imageUrl: p.imageUrl, qty,
       inStock, buildableNow, path: 'blocked', readyDate: null, leadDays: 0,
       workshop: null, materialShort,
       note: p.modelCode ? 'Aucun atelier ne sait produire ce modèle' : 'Modèle non renseigné',
@@ -139,7 +141,7 @@ function availabilityFor(p: ProductLite, qty: number, ctx: AtpContext): Availabi
     addDays(dateMaterials, transit + lead + DEFAULT_QC + transit + DEFAULT_CLIENT_TRANSIT),
   );
   return {
-    productId: p.id, sku: p.sku, name: p.name, qty,
+    productId: p.id, sku: p.sku, name: p.name, imageUrl: p.imageUrl, qty,
     inStock, buildableNow, path: 'production', readyDate, leadDays: totalDays,
     workshop: { id: best.id, name: best.name }, materialShort,
     note: materialShort.length ? 'Sur commande (réappro matière requise)' : 'Sur commande',
