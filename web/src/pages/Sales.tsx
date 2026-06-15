@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../toast';
+import { EmptyState } from '../components/ui';
 
 interface Sale {
   id: string;
@@ -183,8 +184,8 @@ export function Sales() {
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={6} className="py-3 text-white/40">
-                Aucune vente. Enregistre une commande depuis le POS.
+              <td colSpan={6}>
+                <EmptyState title="Aucune vente" hint="Enregistre une commande depuis le POS." />
               </td>
             </tr>
           )}

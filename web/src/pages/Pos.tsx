@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNav } from '../nav';
+import { useToast } from '../toast';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
 import { chargeOnReader } from '../lib/terminal';
@@ -66,7 +67,8 @@ export function Pos() {
   const [usTaxRate, setUsTaxRate] = useState('8'); // estimation, % (la taxe exacte sera calculée par Shopify à l'encaissement)
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
-  const [err, setErr] = useState('');
+  const toast = useToast();
+  const setErr = (m: string) => { if (m) toast(m, 'error'); }; // erreurs → toast
   const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe'>('');
   const [saved, setSaved] = useState<SavedSale | null>(null);
   const [payLink, setPayLink] = useState('');
@@ -257,7 +259,8 @@ export function Pos() {
     setErr('');
     setBusy('save');
     try {
-      await ensureSale();
+      const s = await ensureSale();
+      toast(`Vente enregistrée (${s.reference}).`, 'success');
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -278,6 +281,7 @@ export function Pos() {
         body: {},
       });
       setPayLink(res.url);
+      toast('Lien de paiement généré.', 'success');
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -296,6 +300,7 @@ export function Pos() {
       const s = await ensureSale();
       await chargeOnReader(s.id, s.market, setTpeStatus);
       setTpeStatus('Paiement accepté ✓ — commande Shopify en cours de création.');
+      toast('Paiement TPE accepté ✓', 'success');
     } catch (e) {
       setTpeStatus('');
       setErr((e as Error).message);
@@ -513,7 +518,6 @@ export function Pos() {
         </p>
       </div>
 
-      {err && <p className="text-red-400 text-sm">{err}</p>}
     </div>
   );
 }

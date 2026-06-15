@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useNav } from '../nav';
+import { useToast } from '../toast';
 
 const COUNTRY_CODE: Record<string, string> = { france: 'FR', 'united states': 'US', 'états-unis': 'US', 'royaume-uni': 'GB', 'united kingdom': 'GB', italie: 'IT', italy: 'IT' };
 
@@ -40,6 +41,7 @@ export function Crm() {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const { goTo, setPosCustomer } = useNav();
+  const toast = useToast();
 
   function choose(c: Customer) {
     const a = c.defaultAddress;
@@ -55,6 +57,7 @@ export function Crm() {
       country: a?.country ? COUNTRY_CODE[a.country.toLowerCase()] ?? undefined : undefined,
       note: c.note ?? undefined,
     });
+    toast(`${fullName(c)} rattaché·e à la vente.`, 'info');
     goTo('pos');
   }
 
@@ -64,8 +67,10 @@ export function Crm() {
     try {
       await api('/api/crm/customer', { method: 'PUT', body: { id: selected.id, ...form } });
       setEditing(false);
+      toast('Client mis à jour.', 'success');
       open(selected);
     } catch (e) {
+      toast((e as Error).message, 'error');
       setErr((e as Error).message);
     }
   }
@@ -112,6 +117,7 @@ export function Crm() {
         setErr(ue.map((e) => e.message).join(', '));
         return;
       }
+      toast('Client créé.', 'success');
       setMsg('Client créé.');
       setForm({ firstName: '', lastName: '', email: '', phone: '', note: '' });
       setMode('search');
