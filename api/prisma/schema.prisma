@@ -326,6 +326,7 @@ model Sale {
   stripeAccount         String? // FR | US
   stripePaymentIntentId String?
   stripeSessionId       String?
+  paymentUrl            String? // lien de paiement Stripe Checkout (hébergé)
   paidAt                DateTime?
 
   // Synchronisation Shopify (outbox)

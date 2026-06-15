@@ -55,9 +55,10 @@ export async function markSalePaid(
   saleId: string,
   payment: { stripeAccount?: string; stripePaymentIntentId?: string; stripeSessionId?: string } = {},
 ) {
+  const existing = await prisma.sale.findUnique({ where: { id: saleId } });
   await prisma.sale.update({
     where: { id: saleId },
-    data: { status: 'PAID', paidAt: new Date(), ...payment },
+    data: { status: 'PAID', paidAt: existing?.paidAt ?? new Date(), ...payment },
   });
   await syncSale(saleId).catch(() => {});
   return prisma.sale.findUnique({ where: { id: saleId } });

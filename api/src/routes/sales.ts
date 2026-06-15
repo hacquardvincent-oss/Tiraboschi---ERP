@@ -2,6 +2,12 @@ import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { createSale, markSalePaid, syncSale } from '../services/sales';
+import {
+  createPaymentLink,
+  createTerminalConnectionToken,
+  createTerminalPaymentIntent,
+  captureTerminalPayment,
+} from '../services/payments';
 
 export const salesRouter = Router();
 salesRouter.use(requireAuth);
@@ -45,4 +51,43 @@ salesRouter.post('/:id/pay', async (req, res) => {
 salesRouter.post('/:id/sync', async (req, res) => {
   await syncSale(req.params.id);
   res.json(await prisma.sale.findUnique({ where: { id: req.params.id } }));
+});
+
+// ─── Encaissement Stripe (3b.2 lien / 3b.3 TPE S710) ─────────────────────────
+
+/** 3b.2 — Génère le lien de paiement Stripe Checkout (hébergé). */
+salesRouter.post('/:id/payment-link', async (req, res) => {
+  try {
+    res.json(await createPaymentLink(req.params.id));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+/** 3b.3 — Jeton de connexion Terminal (S710) pour le marché demandé. */
+salesRouter.post('/terminal/connection-token', async (req, res) => {
+  try {
+    res.json(await createTerminalConnectionToken(req.body?.market === 'US' ? 'US' : 'FR'));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+/** 3b.3 — Crée le PaymentIntent card_present (capture manuelle) à encaisser sur le TPE. */
+salesRouter.post('/:id/terminal/intent', async (req, res) => {
+  try {
+    res.json(await createTerminalPaymentIntent(req.params.id));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+/** 3b.3 — Capture le paiement TPE après présentation de la carte. */
+salesRouter.post('/:id/terminal/capture', async (req, res) => {
+  try {
+    await captureTerminalPayment(req.params.id);
+    res.json(await prisma.sale.findUnique({ where: { id: req.params.id } }));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
 });

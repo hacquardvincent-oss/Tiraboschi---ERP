@@ -15,6 +15,7 @@ import { refRouter } from './routes/ref';
 import { productsRouter } from './routes/products';
 import { crmRouter } from './routes/crm';
 import { salesRouter } from './routes/sales';
+import { stripeWebhookRouter } from './routes/stripeWebhook';
 import { processPendingSales } from './services/sales';
 import { dbHealthRouter } from './routes/dbHealth';
 import { erpUiRouter } from './routes/erpUi';
@@ -31,6 +32,9 @@ const WEB_DIST = path.join(__dirname, '..', '..', 'web', 'dist');
 // Frontend servi par la même origine que l'API → CORS permissif (reflète l'origine).
 // (Utile seulement pour le dev cross-port ; aucune origine n'est bloquée.)
 app.use(cors({ origin: true }));
+
+// Webhook Stripe : corps BRUT requis pour vérifier la signature → AVANT express.json.
+app.use('/api/stripe/webhook', stripeWebhookRouter);
 
 app.use(express.json());
 

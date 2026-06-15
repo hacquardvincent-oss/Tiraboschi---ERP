@@ -12,6 +12,7 @@ interface Sale {
   syncStatus: 'PENDING' | 'SYNCED' | 'FAILED';
   shopifyOrderName?: string | null;
   syncError?: string | null;
+  paymentUrl?: string | null;
   createdAt: string;
 }
 
@@ -50,6 +51,19 @@ export function Sales() {
     try {
       await api('/api/pos/sales/' + id + '/sync', { method: 'POST', body: {} });
       await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+  async function genLink(id: string) {
+    setBusy(id);
+    setErr('');
+    try {
+      const res = await api<{ url: string }>('/api/pos/sales/' + id + '/payment-link', { method: 'POST', body: {} });
+      await load();
+      navigator.clipboard?.writeText(res.url);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -110,9 +124,14 @@ export function Sales() {
               </td>
               <td className="py-1.5 text-right">
                 {s.status === 'PENDING' && (
-                  <button className="text-azure" disabled={busy === s.id} onClick={() => pay(s.id)}>
-                    {busy === s.id ? '…' : 'Encaisser'}
-                  </button>
+                  <div className="flex gap-3 justify-end">
+                    <button className="text-azure" disabled={busy === s.id} onClick={() => genLink(s.id)}>
+                      {busy === s.id ? '…' : s.paymentUrl ? 'Lien ↻' : 'Lien'}
+                    </button>
+                    <button className="text-white/60" disabled={busy === s.id} onClick={() => pay(s.id)}>
+                      Encaisser
+                    </button>
+                  </div>
                 )}
                 {s.status === 'PAID' && s.syncStatus === 'FAILED' && (
                   <button className="text-amber-400" disabled={busy === s.id} onClick={() => resync(s.id)}>

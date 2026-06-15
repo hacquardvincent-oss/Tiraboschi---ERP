@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
+import { chargeOnReader } from '../lib/terminal';
 
 interface Product {
   id: string;
@@ -17,6 +18,12 @@ interface CartLine {
   qty: number;
 }
 
+interface SavedSale {
+  id: string;
+  reference: string;
+  market: 'FR' | 'US';
+}
+
 const TVA_EUR = 0.2; // TVA France 20%
 
 export function Pos() {
@@ -29,8 +36,10 @@ export function Pos() {
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
   const [err, setErr] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [savedRef, setSavedRef] = useState('');
+  const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe'>('');
+  const [saved, setSaved] = useState<SavedSale | null>(null);
+  const [payLink, setPayLink] = useState('');
+  const [tpeStatus, setTpeStatus] = useState('');
 
   const search = async (query: string) => {
     setQ(query);
@@ -57,9 +66,18 @@ export function Pos() {
     });
     setQ('');
     setResults([]);
+    // Le panier change → la vente précédemment enregistrée n'est plus à jour.
+    setSaved(null);
+    setPayLink('');
+    setTpeStatus('');
   };
 
-  const removeLine = (sku: string) => setCart((c) => c.filter((l) => l.sku !== sku));
+  const removeLine = (sku: string) => {
+    setCart((c) => c.filter((l) => l.sku !== sku));
+    setSaved(null);
+    setPayLink('');
+    setTpeStatus('');
+  };
 
   const subtotal = cart.reduce((s, l) => s + l.unitHt * l.qty, 0);
   const ship = ddp ? parseFloat(shipping) || 0 : 0;
@@ -71,49 +89,104 @@ export function Pos() {
   const sym = currency === 'EUR' ? '€' : '$';
   const fmt = (n: number) => n.toFixed(2) + ' ' + sym;
 
-  async function saveSale() {
+  /** Crée la vente côté serveur (une seule fois) et la mémorise pour l'encaissement. */
+  async function ensureSale(): Promise<SavedSale> {
+    if (saved) return saved;
+    const items = cart.map((l) => ({
+      title: l.name,
+      sku: l.sku,
+      priceCents: Math.round(l.unitHt * 100),
+      qty: l.qty,
+    }));
+    const taxLines = [
+      {
+        title: currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)',
+        rate: currency === 'EUR' ? 0.2 : (parseFloat(usTaxRate) || 0) / 100,
+        amountCents: Math.round(tax * 100),
+      },
+    ];
+    const market: 'FR' | 'US' = currency === 'EUR' ? 'FR' : 'US';
+    const sale = await api<{ id: string; reference: string }>('/api/pos/sales', {
+      method: 'POST',
+      body: {
+        market,
+        currency,
+        customerEmail: customer.email || undefined,
+        customerName: customer.name || undefined,
+        items,
+        taxLines,
+        shippingCents: ddp ? Math.round(ship * 100) : 0,
+      },
+    });
+    const s: SavedSale = { id: sale.id, reference: sale.reference, market };
+    setSaved(s);
+    return s;
+  }
+
+  async function onSave() {
+    if (cart.length === 0) return setErr('Panier vide.');
     setErr('');
-    setSavedRef('');
-    if (cart.length === 0) {
-      setErr('Panier vide.');
-      return;
-    }
-    setSaving(true);
+    setBusy('save');
     try {
-      const items = cart.map((l) => ({
-        title: l.name,
-        sku: l.sku,
-        priceCents: Math.round(l.unitHt * 100),
-        qty: l.qty,
-      }));
-      const taxLines = [
-        {
-          title: currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)',
-          rate: currency === 'EUR' ? 0.2 : (parseFloat(usTaxRate) || 0) / 100,
-          amountCents: Math.round(tax * 100),
-        },
-      ];
-      const sale = await api<{ reference: string }>('/api/pos/sales', {
-        method: 'POST',
-        body: {
-          market: currency === 'EUR' ? 'FR' : 'US',
-          currency,
-          customerEmail: customer.email || undefined,
-          customerName: customer.name || undefined,
-          items,
-          taxLines,
-          shippingCents: ddp ? Math.round(ship * 100) : 0,
-        },
-      });
-      setSavedRef(sale.reference);
-      setCart([]);
-      setCustomer({ name: '', email: '' });
-      setDdp(false);
+      await ensureSale();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
-      setSaving(false);
+      setBusy('');
     }
+  }
+
+  async function onPaymentLink() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    setErr('');
+    setBusy('link');
+    try {
+      const s = await ensureSale();
+      const res = await api<{ url: string }>(`/api/pos/sales/${s.id}/payment-link`, {
+        method: 'POST',
+        body: {},
+      });
+      setPayLink(res.url);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onTpe() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    setErr('');
+    setBusy('tpe');
+    setTpeStatus('Initialisation…');
+    try {
+      const s = await ensureSale();
+      await chargeOnReader(s.id, s.market, setTpeStatus);
+      setTpeStatus('Paiement accepté ✓ — commande Shopify en cours de création.');
+    } catch (e) {
+      setTpeStatus('');
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function newSale() {
+    setCart([]);
+    setCustomer({ name: '', email: '' });
+    setDdp(false);
+    setSaved(null);
+    setPayLink('');
+    setTpeStatus('');
+    setErr('');
+  }
+
+  function shareWhatsapp() {
+    if (!payLink) return;
+    window.open(
+      'https://wa.me/?text=' + encodeURIComponent('Votre lien de paiement Tiraboschi : ' + payLink),
+      '_blank',
+    );
   }
 
   return (
@@ -205,23 +278,42 @@ export function Pos() {
       {/* Encaissement */}
       <div className="card">
         <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Encaissement</div>
-        <button className="btn w-full" onClick={saveSale} disabled={saving || cart.length === 0}>
-          {saving ? 'Enregistrement…' : 'Enregistrer la commande'}
+        <button className="btn w-full" onClick={onSave} disabled={busy !== '' || cart.length === 0}>
+          {busy === 'save' ? 'Enregistrement…' : saved ? `Commande enregistrée (${saved.reference})` : 'Enregistrer la commande'}
         </button>
         <div className="grid grid-cols-2 gap-3 mt-3">
-          <button className="btn opacity-50" disabled title="À brancher (3b.2/3b.3)">TPE Stripe S710</button>
-          <button className="btn opacity-50" disabled title="À brancher (3b.2/3b.3)">Lien de paiement</button>
+          <button className="btn" onClick={onTpe} disabled={busy !== '' || cart.length === 0}>
+            {busy === 'tpe' ? 'TPE…' : 'TPE Stripe S710'}
+          </button>
+          <button className="btn" onClick={onPaymentLink} disabled={busy !== '' || cart.length === 0}>
+            {busy === 'link' ? 'Génération…' : 'Lien de paiement'}
+          </button>
         </div>
-        <p className="text-white/40 text-[11px] mt-2">
-          La commande est enregistrée (durable) puis apparaît dans <b>Ventes</b> pour encaissement. Le paiement
-          Stripe (lien + TPE S710) est l'étape 3b ; dès succès, la commande Shopify est créée automatiquement
-          (avec retries) — impossible à perdre.
-        </p>
-        {savedRef && (
-          <p className="text-green-400 text-sm mt-2">
-            Vente <b>{savedRef}</b> enregistrée → onglet <b>Ventes</b> pour l'encaisser.
-          </p>
+
+        {tpeStatus && <p className="text-azure text-sm mt-3">{tpeStatus}</p>}
+
+        {payLink && (
+          <div className="mt-3 space-y-2">
+            <div className="text-xs uppercase tracking-editorial text-white/50">Lien de paiement</div>
+            <input className="field text-xs" readOnly value={payLink} onFocus={(e) => e.currentTarget.select()} />
+            <div className="flex gap-2">
+              <button className="btn flex-1" onClick={() => navigator.clipboard?.writeText(payLink)}>📋 Copier</button>
+              <button className="btn flex-1" onClick={shareWhatsapp}>💬 WhatsApp</button>
+            </div>
+            <p className="text-white/40 text-[11px]">
+              Dès que le client paie, la commande Shopify est créée automatiquement (suivi dans <b>Ventes</b>).
+            </p>
+          </div>
         )}
+
+        {saved && (
+          <button className="text-azure text-sm mt-3" onClick={newSale}>+ Nouvelle vente</button>
+        )}
+
+        <p className="text-white/40 text-[11px] mt-2">
+          La commande est enregistrée (durable) avant tout encaissement. Paiement Stripe (lien ou TPE
+          S710) → commande Shopify créée automatiquement, avec retries — impossible à perdre.
+        </p>
       </div>
 
       {err && <p className="text-red-400 text-sm">{err}</p>}
