@@ -3,6 +3,7 @@ import { config } from '../config';
 import { prisma } from '../db/prisma';
 import { markSalePaid } from './sales';
 import type { SaleItem, SaleTaxLine } from './sales';
+import { cancelShopifyOrder } from './shopify';
 
 /**
  * Service d'encaissement Stripe (V2) — brique 3b.2 (lien de paiement) + 3b.3 (TPE S710).
@@ -205,4 +206,34 @@ async function payByMetadata(
   const sale = await prisma.sale.findUnique({ where: { id: saleId } });
   if (!sale || (sale.status === 'PAID' && sale.shopifyOrderId)) return; // idempotent
   await markSalePaid(saleId, { stripeAccount: market, ...payment });
+}
+
+/** Rembourse une vente : remboursement Stripe (par PaymentIntent) + annulation Shopify, statut REFUNDED. */
+export async function refundSale(saleId: string) {
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+  if (!sale) throw new Error('Vente introuvable.');
+  if (sale.status === 'REFUNDED') throw new Error('Vente déjà remboursée.');
+  const stripe = stripeFor(sale.stripeAccount ?? marketOf(sale));
+
+  let paymentIntentId = sale.stripePaymentIntentId ?? undefined;
+  if (!paymentIntentId && sale.stripeSessionId) {
+    const session = await stripe.checkout.sessions.retrieve(sale.stripeSessionId);
+    paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+  }
+  if (paymentIntentId) {
+    await stripe.refunds.create({ payment_intent: paymentIntentId });
+  }
+  if (sale.shopifyOrderId) await cancelShopifyOrder(sale.shopifyOrderId).catch(() => {});
+  await prisma.sale.update({ where: { id: saleId }, data: { status: 'REFUNDED' } });
+  return prisma.sale.findUnique({ where: { id: saleId } });
+}
+
+/** Annule une vente (non encaissée ou erreur) : statut CANCELLED + annulation Shopify si commande créée. */
+export async function cancelSale(saleId: string) {
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+  if (!sale) throw new Error('Vente introuvable.');
+  if (sale.status === 'CANCELLED') throw new Error('Vente déjà annulée.');
+  if (sale.shopifyOrderId) await cancelShopifyOrder(sale.shopifyOrderId).catch(() => {});
+  await prisma.sale.update({ where: { id: saleId }, data: { status: 'CANCELLED' } });
+  return prisma.sale.findUnique({ where: { id: saleId } });
 }

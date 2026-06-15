@@ -285,6 +285,27 @@ export async function getReports(): Promise<DashboardReports> {
   };
 }
 
+// ─── Annulation d'une commande Shopify (best-effort) ──────────────────────────
+interface OrderCancelResult {
+  orderCancel: { userErrors: { message: string }[] } | null;
+}
+export async function cancelShopifyOrder(orderId: string, restock = true): Promise<void> {
+  const mutation = `
+    mutation OrderCancel($orderId: ID!, $reason: OrderCancelReason!, $refund: Boolean!, $restock: Boolean!) {
+      orderCancel(orderId: $orderId, reason: $reason, refund: $refund, restock: $restock, notifyCustomer: false) {
+        userErrors { message }
+      }
+    }`;
+  const res = await shopifyGraphQL<OrderCancelResult>(mutation, {
+    orderId,
+    reason: 'OTHER',
+    refund: false, // le remboursement monétaire est géré côté Stripe
+    restock,
+  });
+  const errs = res.orderCancel?.userErrors ?? [];
+  if (errs.length > 0) throw new Error(errs.map((e) => e.message).join(', '));
+}
+
 // ─── POS : calcul de taxe réel via Shopify (draftOrderCalculate) ──────────────
 
 export interface TaxQuoteInput {

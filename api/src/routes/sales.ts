@@ -8,6 +8,8 @@ import {
   createTerminalConnectionToken,
   createTerminalPaymentIntent,
   captureTerminalPayment,
+  refundSale,
+  cancelSale,
 } from '../services/payments';
 
 export const salesRouter = Router();
@@ -81,6 +83,22 @@ salesRouter.post('/:id/pay', async (req, res) => {
 salesRouter.post('/:id/sync', async (req, res) => {
   await syncSale(req.params.id);
   res.json(await prisma.sale.findUnique({ where: { id: req.params.id } }));
+});
+
+salesRouter.post('/:id/refund', async (req, res) => {
+  try {
+    res.json(await refundSale(req.params.id));
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
+salesRouter.post('/:id/cancel', async (req, res) => {
+  try {
+    res.json(await cancelSale(req.params.id));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
 });
 
 // ─── Encaissement Stripe (3b.2 lien / 3b.3 TPE S710) ─────────────────────────

@@ -70,6 +70,32 @@ export function Sales() {
       setBusy('');
     }
   }
+  async function refund(id: string) {
+    if (!confirm('Rembourser cette vente ? Le remboursement Stripe sera déclenché.')) return;
+    setBusy(id);
+    setErr('');
+    try {
+      await api('/api/pos/sales/' + id + '/refund', { method: 'POST', body: {} });
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+  async function cancel(id: string) {
+    if (!confirm('Annuler cette vente ?')) return;
+    setBusy(id);
+    setErr('');
+    try {
+      await api('/api/pos/sales/' + id + '/cancel', { method: 'POST', body: {} });
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
 
   const fmt = (s: Sale) => (s.totalCents / 100).toFixed(2) + ' ' + (s.currency === 'EUR' ? '€' : '$');
   const filtered = sales.filter((s) => {
@@ -133,10 +159,18 @@ export function Sales() {
                     </button>
                   </div>
                 )}
-                {s.status === 'PAID' && s.syncStatus === 'FAILED' && (
-                  <button className="text-amber-400" disabled={busy === s.id} onClick={() => resync(s.id)}>
-                    {busy === s.id ? '…' : 'Resync'}
-                  </button>
+                {s.status === 'PAID' && (
+                  <div className="flex gap-3 justify-end items-center">
+                    {s.syncStatus === 'FAILED' && (
+                      <button className="text-amber-400" disabled={busy === s.id} onClick={() => resync(s.id)}>
+                        {busy === s.id ? '…' : 'Resync'}
+                      </button>
+                    )}
+                    <button className="text-white/60" disabled={busy === s.id} onClick={() => refund(s.id)}>Rembourser</button>
+                  </div>
+                )}
+                {s.status === 'PENDING' && (
+                  <button className="text-red-400/70 mt-1" disabled={busy === s.id} onClick={() => cancel(s.id)}>Annuler</button>
                 )}
               </td>
             </tr>
