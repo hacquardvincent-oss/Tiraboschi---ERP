@@ -226,6 +226,62 @@ export async function importMaterialsCsv(text: string): Promise<ImportResult> {
 }
 
 /**
+ * Import descriptif des fiches techniques (FICHES, feuille RESUME) → texte de référence
+ * par modèle, stocké dans Product.bom.techSheet (lisible dans la fiche PLM, non relié au stock).
+ * Rattache le modèle aux produits via le référentiel models (label → code) ou le nom.
+ */
+export async function importTechSheetsCsv(text: string): Promise<ImportResult> {
+  const rows = parseCsv(text);
+  const res: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+  const headers = rows.length ? Object.keys(rows[0]) : [];
+  const modelHeader = headers.find((h) => /mod[èe]le/i.test(h));
+  if (!modelHeader) {
+    res.errors.push('Colonne « Modèle » introuvable.');
+    return res;
+  }
+  // Regroupe les lignes (et leurs champs non vides) par modèle.
+  const byModel = new Map<string, string[]>();
+  for (const row of rows) {
+    const model = (row[modelHeader] ?? '').trim();
+    if (!model) {
+      res.skipped++;
+      continue;
+    }
+    const parts = headers
+      .filter((h) => h !== modelHeader && (row[h] ?? '').trim() !== '')
+      .map((h) => `${h}: ${row[h].trim()}`);
+    const lines = byModel.get(model) ?? [];
+    if (parts.length) lines.push(parts.join(' · '));
+    byModel.set(model, lines);
+  }
+
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  for (const [model, lines] of byModel) {
+    const techSheet = lines.join('\n');
+    try {
+      // Trouve les codes modèle correspondants
+      const refModels = await prisma.refItem.findMany({ where: { category: 'models' } });
+      const codes = refModels.filter((r) => norm(r.label) === norm(model)).map((r) => r.code);
+      const products = codes.length
+        ? await prisma.product.findMany({ where: { modelCode: { in: codes } } })
+        : await prisma.product.findMany({ where: { name: { startsWith: model } } });
+      if (products.length === 0) {
+        res.skipped++;
+        continue;
+      }
+      for (const p of products) {
+        const bom = (p.bom as Record<string, unknown> | null) ?? {};
+        await prisma.product.update({ where: { id: p.id }, data: { bom: { ...bom, techSheet } as object } });
+      }
+      res.updated += products.length;
+    } catch (e) {
+      res.errors.push(`${model}: ${(e as Error).message}`);
+    }
+  }
+  return res;
+}
+
+/**
  * Importe une liste de référentiel (une catégorie) depuis un CSV.
  * Colonnes reconnues : code/id (optionnel) + label/nom/libellé. Code auto = label si absent.
  * Idempotent : upsert par (category, code).

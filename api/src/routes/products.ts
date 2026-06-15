@@ -4,7 +4,7 @@ import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { assembleSku } from '../services/sku';
 import { syncProductToShopify } from '../services/shopify';
-import { importCatalogCsv } from '../services/import';
+import { importCatalogCsv, importTechSheetsCsv } from '../services/import';
 import { computeAvailability } from '../services/atp';
 
 export const productsRouter = Router();
@@ -107,6 +107,17 @@ productsRouter.post('/import', async (req, res) => {
   if (typeof csv !== 'string' || csv.trim().length === 0) return res.status(400).json({ error: 'csv requis.' });
   try {
     res.json(await importCatalogCsv(csv));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+// Import descriptif des fiches techniques (FICHES) → texte de référence par modèle
+productsRouter.post('/tech-sheets-import', async (req, res) => {
+  const csv = (req.body ?? {}).csv;
+  if (typeof csv !== 'string' || !csv.trim()) return res.status(400).json({ error: 'csv requis.' });
+  try {
+    res.json(await importTechSheetsCsv(csv));
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }

@@ -32,6 +32,7 @@ interface Bom {
   options: string[];
   materials: BomMaterial[];
   jewelry: BomJewelry[];
+  techSheet?: string; // fiche technique descriptive importée (référence)
 }
 
 interface MaterialOpt {
@@ -122,15 +123,17 @@ export function Collection() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState('');
 
+  const [importKind, setImportKind] = useState<'catalog' | 'tech'>('catalog');
   async function runImport() {
     if (!csvText.trim()) return setImportMsg('Colle un CSV ou choisis un fichier.');
     setImporting(true);
     setImportMsg('');
     try {
-      const r = await api<{ created: number; updated: number; skipped: number; errors: string[] }>(
-        '/api/products/import',
-        { method: 'POST', body: { csv: csvText } },
-      );
+      const url = importKind === 'catalog' ? '/api/products/import' : '/api/products/tech-sheets-import';
+      const r = await api<{ created: number; updated: number; skipped: number; errors: string[] }>(url, {
+        method: 'POST',
+        body: { csv: csvText },
+      });
       setImportMsg(`${r.created} créé(s), ${r.updated} mis à jour, ${r.skipped} ignoré(s)${r.errors.length ? `, ${r.errors.length} erreur(s)` : ''}.`);
       setCsvText('');
       load(q);
@@ -192,7 +195,7 @@ export function Collection() {
       if (Array.isArray(p.jewelryCodes)) next.jewelry = (p.jewelryCodes as string[])[0] ?? '';
       setForm(next as Form);
       const b = p.bom as Bom | null;
-      setBom(b ? { options: b.options ?? [], materials: b.materials ?? [], jewelry: b.jewelry ?? [] } : emptyBom());
+      setBom(b ? { options: b.options ?? [], materials: b.materials ?? [], jewelry: b.jewelry ?? [], techSheet: b.techSheet } : emptyBom());
       const lines = Array.isArray(p.bomLines)
         ? (p.bomLines as Record<string, unknown>[]).map((l) => ({
             materialId: String(l.materialId),
@@ -292,7 +295,15 @@ export function Collection() {
 
       {showImport && (
         <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
-          <div className="text-xs text-white/50">Import collection (formats app_base / Import Shopify ; upsert par SKU)</div>
+          <div className="flex gap-2 text-xs">
+            <button className={'px-2 py-1 rounded border ' + (importKind === 'catalog' ? 'border-azure text-azure' : 'border-white/20 text-white/50')} onClick={() => setImportKind('catalog')}>Catalogue</button>
+            <button className={'px-2 py-1 rounded border ' + (importKind === 'tech' ? 'border-azure text-azure' : 'border-white/20 text-white/50')} onClick={() => setImportKind('tech')}>Fiches techniques</button>
+          </div>
+          <div className="text-xs text-white/50">
+            {importKind === 'catalog'
+              ? 'Import collection (formats app_base / Import Shopify ; upsert par SKU)'
+              : 'Import fiches techniques (FICHES, feuille RESUME) → texte de référence par modèle'}
+          </div>
           <input
             type="file"
             accept=".csv,text/csv"
@@ -463,6 +474,12 @@ export function Collection() {
               {bomTotal > 0 && <div className="text-right text-xs text-white/60">Coût matières estimé : {bomTotal.toFixed(2)} €</div>}
             </div>
           </div>
+          {bom.techSheet && (
+            <div className="col-span-2 mt-2">
+              <div className="text-[11px] text-white/40 mb-1">Fiche technique (référence importée)</div>
+              <pre className="text-[11px] text-white/60 whitespace-pre-wrap bg-white/5 rounded p-2 max-h-40 overflow-auto">{bom.techSheet}</pre>
+            </div>
+          )}
         </Section>
 
         <Section title="5. Bijouterie">
