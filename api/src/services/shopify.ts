@@ -106,10 +106,13 @@ export interface RecoveryOrderInput {
     firstName?: string;
     lastName?: string;
     address1?: string;
+    address2?: string;
     city?: string;
+    province?: string;
     provinceCode?: string;
     zip?: string;
     countryCode?: string;
+    phone?: string;
   };
   lineItems: RecoveryLineItem[];
   taxLines?: RecoveryTaxLine[];

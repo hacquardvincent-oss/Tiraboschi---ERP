@@ -313,6 +313,7 @@ model Sale {
   currency      String // EUR | USD
   customerEmail String?
   customerName  String?
+  customer      Json? // { firstName,lastName,email,phone,phoneExt,address1,address2,city,zip,province,country,acceptsEmail,acceptsSms,note }
   items         Json // [{ title, sku?, priceCents, qty }]
   taxLines      Json? // [{ title, rate?, amountCents }]
   subtotalCents Int     @default(0)

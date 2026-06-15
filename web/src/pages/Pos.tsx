@@ -31,7 +31,24 @@ export function Pos() {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [customer, setCustomer] = useState({ name: '', email: '' });
+  const emptyCustomer = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneExt: currency === 'USD' ? '+1' : '+33',
+    phone: '',
+    address1: '',
+    address2: '',
+    city: '',
+    zip: '',
+    province: '',
+    country: currency === 'USD' ? 'US' : 'FR',
+    acceptsEmail: true,
+    acceptsSms: true,
+    note: '',
+  };
+  const [customer, setCustomer] = useState(emptyCustomer);
+  const setC = (patch: Partial<typeof emptyCustomer>) => setCustomer((c) => ({ ...c, ...patch }));
   const [usTaxRate, setUsTaxRate] = useState('8'); // estimation, % (la taxe exacte sera calculée par Shopify à l'encaissement)
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
@@ -89,6 +106,14 @@ export function Pos() {
   const sym = currency === 'EUR' ? '€' : '$';
   const fmt = (n: number) => n.toFixed(2) + ' ' + sym;
 
+  /** Validation minimale : email (reçu) ; adresse complète si expédition DDP. */
+  function validate(): string | null {
+    if (!customer.email.trim()) return 'Email client requis (pour le reçu).';
+    if (ddp && (!customer.address1.trim() || !customer.city.trim() || !customer.zip.trim()))
+      return 'Adresse, ville et code postal requis pour une expédition DDP.';
+    return null;
+  }
+
   /** Crée la vente côté serveur (une seule fois) et la mémorise pour l'encaissement. */
   async function ensureSale(): Promise<SavedSale> {
     if (saved) return saved;
@@ -111,8 +136,7 @@ export function Pos() {
       body: {
         market,
         currency,
-        customerEmail: customer.email || undefined,
-        customerName: customer.name || undefined,
+        customer,
         items,
         taxLines,
         shippingCents: ddp ? Math.round(ship * 100) : 0,
@@ -125,6 +149,8 @@ export function Pos() {
 
   async function onSave() {
     if (cart.length === 0) return setErr('Panier vide.');
+    const v = validate();
+    if (v) return setErr(v);
     setErr('');
     setBusy('save');
     try {
@@ -138,6 +164,8 @@ export function Pos() {
 
   async function onPaymentLink() {
     if (cart.length === 0) return setErr('Panier vide.');
+    const v = validate();
+    if (v) return setErr(v);
     setErr('');
     setBusy('link');
     try {
@@ -156,6 +184,8 @@ export function Pos() {
 
   async function onTpe() {
     if (cart.length === 0) return setErr('Panier vide.');
+    const v = validate();
+    if (v) return setErr(v);
     setErr('');
     setBusy('tpe');
     setTpeStatus('Initialisation…');
@@ -173,7 +203,7 @@ export function Pos() {
 
   function newSale() {
     setCart([]);
-    setCustomer({ name: '', email: '' });
+    setCustomer(emptyCustomer);
     setDdp(false);
     setSaved(null);
     setPayLink('');
@@ -204,8 +234,38 @@ export function Pos() {
       <div className="card">
         <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Client</div>
         <div className="grid grid-cols-2 gap-3">
-          <input className="field" placeholder="Nom" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />
-          <input className="field" placeholder="Email" value={customer.email} onChange={(e) => setCustomer({ ...customer, email: e.target.value })} />
+          <input className="field" placeholder="Prénom" value={customer.firstName} onChange={(e) => setC({ firstName: e.target.value })} />
+          <input className="field" placeholder="Nom" value={customer.lastName} onChange={(e) => setC({ lastName: e.target.value })} />
+          <input className="field col-span-2" type="email" placeholder="Email (obligatoire pour le reçu)" value={customer.email} onChange={(e) => setC({ email: e.target.value })} />
+          <div className="flex gap-2 col-span-2">
+            <select className="field w-24" value={customer.phoneExt} onChange={(e) => setC({ phoneExt: e.target.value })}>
+              <option value="+33">🇫🇷 +33</option>
+              <option value="+1">🇺🇸 +1</option>
+              <option value="+44">🇬🇧 +44</option>
+              <option value="+39">🇮🇹 +39</option>
+            </select>
+            <input className="field flex-1" type="tel" placeholder="Téléphone" value={customer.phone} onChange={(e) => setC({ phone: e.target.value })} />
+          </div>
+          <input className="field col-span-2" placeholder="Adresse (ligne 1)" value={customer.address1} onChange={(e) => setC({ address1: e.target.value })} />
+          <input className="field col-span-2" placeholder="Appartement, suite… (optionnel)" value={customer.address2} onChange={(e) => setC({ address2: e.target.value })} />
+          <input className="field" placeholder="Ville" value={customer.city} onChange={(e) => setC({ city: e.target.value })} />
+          <input className="field" placeholder="Code postal" value={customer.zip} onChange={(e) => setC({ zip: e.target.value })} />
+          <input className="field" placeholder="État / Province" value={customer.province} onChange={(e) => setC({ province: e.target.value })} />
+          <select className="field" value={customer.country} onChange={(e) => setC({ country: e.target.value })}>
+            <option value="US">États-Unis</option>
+            <option value="FR">France</option>
+            <option value="GB">Royaume-Uni</option>
+            <option value="IT">Italie</option>
+          </select>
+          <textarea className="field col-span-2" rows={2} placeholder="Notes sur le client (goûts…)" value={customer.note} onChange={(e) => setC({ note: e.target.value })} />
+        </div>
+        <div className="flex gap-4 mt-2 text-xs text-white/70">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={customer.acceptsEmail} onChange={(e) => setC({ acceptsEmail: e.target.checked })} /> Marketing email
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={customer.acceptsSms} onChange={(e) => setC({ acceptsSms: e.target.checked })} /> Marketing SMS
+          </label>
         </div>
       </div>
 

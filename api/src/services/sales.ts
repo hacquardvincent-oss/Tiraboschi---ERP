@@ -13,11 +13,29 @@ export interface SaleTaxLine {
   amountCents: number;
 }
 
+export interface SaleCustomer {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  phoneExt?: string; // indicatif (+33 / +1…)
+  address1?: string;
+  address2?: string;
+  city?: string;
+  zip?: string;
+  province?: string; // état / province (code ou nom)
+  country?: string; // FR | US
+  acceptsEmail?: boolean;
+  acceptsSms?: boolean;
+  note?: string;
+}
+
 export interface CreateSaleInput {
   market: 'FR' | 'US';
   currency: string;
   customerEmail?: string;
   customerName?: string;
+  customer?: SaleCustomer;
   items: SaleItem[];
   taxLines?: SaleTaxLine[];
   shippingCents?: number;
@@ -26,6 +44,12 @@ export interface CreateSaleInput {
 
 const cents = (n: number) => Math.round(n);
 const toAmount = (c: number) => (c / 100).toFixed(2);
+
+function fullName(c?: SaleCustomer): string | undefined {
+  if (!c) return undefined;
+  const n = [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
+  return n || undefined;
+}
 
 export async function createSale(input: CreateSaleInput) {
   const subtotalCents = input.items.reduce((s, i) => s + cents(i.priceCents) * i.qty, 0);
@@ -37,8 +61,9 @@ export async function createSale(input: CreateSaleInput) {
       reference: 'SALE-' + Date.now(),
       market: input.market,
       currency: input.currency,
-      customerEmail: input.customerEmail,
-      customerName: input.customerName,
+      customerEmail: input.customerEmail ?? input.customer?.email,
+      customerName: input.customerName ?? fullName(input.customer),
+      customer: (input.customer ?? undefined) as unknown as object | undefined,
       items: input.items as unknown as object,
       taxLines: (input.taxLines ?? []) as unknown as object,
       subtotalCents,
@@ -82,12 +107,30 @@ export async function syncSale(saleId: string): Promise<void> {
   }
   const items = (sale.items as unknown as SaleItem[]) ?? [];
   const taxLines = (sale.taxLines as unknown as SaleTaxLine[]) ?? [];
-  const name = splitName(sale.customerName);
+  const cust = (sale.customer as unknown as SaleCustomer | null) ?? undefined;
+  const split = splitName(sale.customerName);
+  const firstName = cust?.firstName ?? split.firstName;
+  const lastName = cust?.lastName ?? split.lastName;
+  const phone = cust?.phone ? `${cust.phoneExt ?? ''}${cust.phone}`.trim() : undefined;
+  const shippingAddress = cust?.address1
+    ? {
+        firstName,
+        lastName,
+        address1: cust.address1,
+        address2: cust.address2 || undefined,
+        city: cust.city || undefined,
+        province: cust.province || undefined,
+        zip: cust.zip || undefined,
+        countryCode: cust.country || undefined,
+        phone,
+      }
+    : undefined;
   try {
     const res = await createRecoveryOrder({
       currency: sale.currency,
       email: sale.customerEmail ?? undefined,
-      customer: name.firstName || name.lastName ? name : undefined,
+      customer: firstName || lastName ? { firstName, lastName } : undefined,
+      shippingAddress,
       lineItems: items.map((i) => ({
         title: i.title,
         sku: i.sku,

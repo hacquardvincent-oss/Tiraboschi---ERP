@@ -27,6 +27,7 @@ salesRouter.post('/', async (req, res) => {
       currency: b.currency ?? (b.market === 'US' ? 'USD' : 'EUR'),
       customerEmail: b.customerEmail,
       customerName: b.customerName,
+      customer: b.customer,
       items: b.items,
       taxLines: b.taxLines,
       shippingCents: b.shippingCents,
