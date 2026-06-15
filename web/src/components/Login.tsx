@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../store';
 import { useI18n } from '../i18n';
+import { Logo } from './Logo';
 
 export function Login() {
   const { login } = useAuth();
@@ -26,8 +27,9 @@ export function Login() {
   return (
     <div className="min-h-full flex items-center justify-center p-4">
       <form onSubmit={submit} className="card w-full max-w-sm">
-        <h1 className="text-azure text-lg mb-1">Tiraboschi</h1>
-        <p className="text-white/50 text-xs mb-5">POS / ERP</p>
+        <div className="mb-6 mt-2">
+          <Logo />
+        </div>
         <label className="text-xs font-semibold">{t('login.email')}</label>
         <input
           className="field mt-1 mb-3"

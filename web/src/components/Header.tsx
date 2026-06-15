@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth, useCurrency } from '../store';
 import { useI18n } from '../i18n';
 import { api } from '../lib/api';
+import { Logo } from './Logo';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -18,7 +19,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-10 bg-ink border-b border-white/10 px-4 py-3 flex items-center justify-between"
       style={{ boxShadow: '0 2px 0 0 #00D4FF' }}>
-      <div className="text-azure font-semibold tracking-editorial text-sm">TIRABOSCHI</div>
+      <Logo compact />
       <div className="flex items-center gap-2 text-xs">
         {conn && (
           <>
