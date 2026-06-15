@@ -101,6 +101,13 @@ model Product {
   @@index([name])
 }
 
+// Paramètres globaux clé/valeur (frais de port, etc.)
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 // ─── RÉFÉRENTIELS ─────────────────────────────────────────────────────────────
 enum MaterialCategory {
   LEATHER // peaux

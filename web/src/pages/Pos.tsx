@@ -76,6 +76,13 @@ export function Pos() {
   const [taxBusy, setTaxBusy] = useState(false);
 
   useEffect(() => {
+    // Frais de port DDP par défaut depuis le paramètre Admin.
+    api<{ value: string | null }>('/api/settings/globalShippingUsd')
+      .then((s) => { if (s.value) setShipping(s.value); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const cat = cart.filter((l) => l.id);
     if (cat.length === 0) return setCartAvail(null);
     api<{ readyDate: string | null; lines: CartAvailLine[] }>('/api/catalog/availability', {

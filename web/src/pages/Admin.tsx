@@ -38,7 +38,44 @@ export function Admin() {
         <button className={'px-3 py-1 rounded border ' + (adminTab === 'bdd' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setAdminTab('bdd')}>Base de données</button>
         <button className={'px-3 py-1 rounded border ' + (adminTab === 'users' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setAdminTab('users')}>Utilisateurs</button>
       </div>
-      {adminTab === 'bdd' ? <RefAdmin /> : <UsersAdmin />}
+      {adminTab === 'bdd' ? (
+        <>
+          <GlobalSettings />
+          <RefAdmin />
+        </>
+      ) : (
+        <UsersAdmin />
+      )}
+    </div>
+  );
+}
+
+function GlobalSettings() {
+  const [shipping, setShipping] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    api<{ value: string | null }>('/api/settings/globalShippingUsd').then((s) => setShipping(s.value ?? '')).catch(() => {});
+  }, []);
+  async function save() {
+    try {
+      await api('/api/settings/globalShippingUsd', { method: 'PUT', body: { value: shipping } });
+      setMsg('Enregistré.');
+      setTimeout(() => setMsg(''), 2000);
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+  return (
+    <div className="card mb-4">
+      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Frais de port globaux (Expédié DDP)</div>
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="block text-xs font-semibold mb-1">Montant $ (pré-rempli au POS)</label>
+          <input className="field" type="number" step="0.01" placeholder="ex. 100" value={shipping} onChange={(e) => setShipping(e.target.value)} />
+        </div>
+        <button className="btn" onClick={save}>Enregistrer</button>
+        {msg && <span className="text-green-400 text-xs">{msg}</span>}
+      </div>
     </div>
   );
 }
