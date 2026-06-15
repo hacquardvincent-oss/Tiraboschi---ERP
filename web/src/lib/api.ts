@@ -27,6 +27,12 @@ export async function api<T>(
   });
   const data: unknown = await res.json().catch(() => ({}));
   if (!res.ok) {
+    // Session expirée/invalide : on nettoie et on renvoie à l'écran de connexion.
+    if (res.status === 401 && token && path !== '/api/auth/login') {
+      setToken(null);
+      localStorage.removeItem('tiraboschi_user');
+      location.reload();
+    }
     const msg = (data as { error?: string }).error ?? 'HTTP ' + res.status;
     throw new Error(msg);
   }

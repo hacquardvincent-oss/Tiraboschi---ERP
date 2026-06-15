@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const SECRET: string = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
-const EXPIRES_IN = '12h';
+const EXPIRES_IN = '7d'; // session longue (ventes événementielles sur plusieurs jours)
 
 export interface JwtPayload {
   sub: string;
