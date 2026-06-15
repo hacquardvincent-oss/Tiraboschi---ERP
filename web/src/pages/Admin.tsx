@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { Tabs } from '../components/ui';
 
 interface RefItem {
   id: string;
@@ -34,9 +35,8 @@ export function Admin() {
   const [adminTab, setAdminTab] = useState<'bdd' | 'users'>('bdd');
   return (
     <div>
-      <div className="flex gap-2 mb-3 text-sm">
-        <button className={'px-3 py-1 rounded border ' + (adminTab === 'bdd' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setAdminTab('bdd')}>Base de données</button>
-        <button className={'px-3 py-1 rounded border ' + (adminTab === 'users' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setAdminTab('users')}>Utilisateurs</button>
+      <div className="mb-3">
+        <Tabs active={adminTab} onChange={setAdminTab} tabs={[['bdd', 'Base de données'], ['users', 'Utilisateurs']] as ['bdd' | 'users', string][]} />
       </div>
       {adminTab === 'bdd' ? (
         <>

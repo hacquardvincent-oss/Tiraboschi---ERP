@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { RefSelect } from '../components/RefSelect';
+import { Tabs } from '../components/ui';
 import { useToast } from '../toast';
 
 interface Product {
@@ -326,9 +327,8 @@ export function Collection() {
         </div>
       )}
 
-      <div className="flex gap-2 mb-3 text-sm">
-        <button className={'px-3 py-1 rounded border ' + (listMode === 'edit' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setListMode('edit')}>Édition</button>
-        <button className={'px-3 py-1 rounded border ' + (listMode === 'avail' ? 'border-azure text-azure' : 'border-white/20 text-white/60')} onClick={() => setListMode('avail')}>Catalogue & délais</button>
+      <div className="mb-3">
+        <Tabs active={listMode} onChange={setListMode} tabs={[['edit', 'Édition'], ['avail', 'Catalogue & délais']] as ['edit' | 'avail', string][]} />
       </div>
 
       {listMode === 'edit' && (

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { Tabs } from '../components/ui';
+import { useToast } from '../toast';
 
 interface Supplier {
   id: string;
@@ -146,45 +148,34 @@ const PROD_STATUS_FR: Record<string, string> = {
 
 export function Inventaire() {
   const [tab, setTab] = useState<Tab>('dashboard');
-  const [err, setErr] = useState('');
+  const toast = useToast();
+  // Canal de message unifié (toast) : tonalité déduite du contenu.
+  const notify = (m: string) => toast(m, /erreur|introuvable|requis|échec|invalide|impossible/i.test(m) ? 'error' : 'info');
 
   return (
     <div className="space-y-4">
       <div className="card">
-        <h2 className="text-base mb-3">OPS — Production & stock</h2>
-        <div className="flex gap-2 flex-wrap text-sm">
-          {(
-            [
-              ['dashboard', 'Tableau de bord'],
-              ['materials', 'Stock matières'],
-              ['production', 'Production'],
-              ['planning', 'Planification'],
-              ['pieces', 'Stock pièces'],
-              ['workshops', 'Ateliers'],
-            ] as [Tab, string][]
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              className={'px-3 py-1 rounded border ' + (tab === k ? 'border-azure text-azure' : 'border-white/20 text-white/60')}
-              onClick={() => {
-                setErr('');
-                setTab(k);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <h2 className="text-base mb-3">OPS — Production &amp; stock</h2>
+        <Tabs
+          active={tab}
+          onChange={setTab}
+          tabs={[
+            ['dashboard', 'Tableau de bord'],
+            ['materials', 'Stock matières'],
+            ['production', 'Production'],
+            ['planning', 'Planification'],
+            ['pieces', 'Stock pièces'],
+            ['workshops', 'Ateliers'],
+          ] as [Tab, string][]}
+        />
       </div>
 
-      {err && <p className="text-red-400 text-sm">{err}</p>}
-
-      {tab === 'dashboard' && <DashboardTab onErr={setErr} />}
-      {tab === 'materials' && <MaterialsTab onErr={setErr} />}
-      {tab === 'production' && <ProductionTab onErr={setErr} />}
-      {tab === 'planning' && <PlanningTab onErr={setErr} />}
-      {tab === 'pieces' && <PiecesTab onErr={setErr} />}
-      {tab === 'workshops' && <WorkshopsTab onErr={setErr} />}
+      {tab === 'dashboard' && <DashboardTab onErr={notify} />}
+      {tab === 'materials' && <MaterialsTab onErr={notify} />}
+      {tab === 'production' && <ProductionTab onErr={notify} />}
+      {tab === 'planning' && <PlanningTab onErr={notify} />}
+      {tab === 'pieces' && <PiecesTab onErr={notify} />}
+      {tab === 'workshops' && <WorkshopsTab onErr={notify} />}
     </div>
   );
 }

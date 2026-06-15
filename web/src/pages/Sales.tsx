@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useToast } from '../toast';
 
 interface Sale {
   id: string;
@@ -24,6 +25,7 @@ const STATUS_LABEL: Record<Sale['status'], string> = {
 };
 
 export function Sales() {
+  const toast = useToast();
   const [sales, setSales] = useState<Sale[]>([]);
   const [q, setQ] = useState('');
   const [err, setErr] = useState('');
@@ -76,8 +78,10 @@ export function Sales() {
     setErr('');
     try {
       await api('/api/pos/sales/' + id + '/refund', { method: 'POST', body: {} });
+      toast('Vente remboursée.', 'success');
       await load();
     } catch (e) {
+      toast((e as Error).message, 'error');
       setErr((e as Error).message);
     } finally {
       setBusy('');
@@ -89,8 +93,10 @@ export function Sales() {
     setErr('');
     try {
       await api('/api/pos/sales/' + id + '/cancel', { method: 'POST', body: {} });
+      toast('Vente annulée.', 'success');
       await load();
     } catch (e) {
+      toast((e as Error).message, 'error');
       setErr((e as Error).message);
     } finally {
       setBusy('');
