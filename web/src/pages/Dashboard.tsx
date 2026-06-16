@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../store';
+import { useI18n } from '../i18n';
 
 interface Reports {
   currency: string;
@@ -25,6 +26,7 @@ const STATUS_FR: Record<string, string> = {
 
 export function Dashboard() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [rep, setRep] = useState<Reports | null>(null);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,11 +44,11 @@ export function Dashboard() {
   return (
     <div className="space-y-4">
       <div className="card">
-        <h2 className="text-base">Bonjour {user?.firstName || ''}</h2>
-        <p className="text-white/40 text-xs">Activité Shopify — 31 derniers jours</p>
+        <h2 className="text-base">{t('Bonjour')} {user?.firstName || ''}</h2>
+        <p className="text-white/40 text-xs">{t('Activité Shopify — 31 derniers jours')}</p>
       </div>
 
-      {loading && <p className="text-white/40 text-sm">Chargement des KPIs…</p>}
+      {loading && <p className="text-white/40 text-sm">{t('Chargement des KPIs…')}</p>}
       {err && (
         <div className="card">
           <p className="text-red-400 text-sm">KPIs indisponibles : {err}</p>
@@ -57,23 +59,23 @@ export function Dashboard() {
       {rep && (
         <>
           <div className="grid grid-cols-2 gap-3">
-            <Kpi label="Aujourd'hui" value={money(rep.daily)} accent />
-            <Kpi label="Cette semaine" value={money(rep.weekly)} />
-            <Kpi label="Ce mois" value={money(rep.monthly)} />
-            <Kpi label="Base clients" value={rep.crmCount === null ? '—' : String(rep.crmCount)} />
+            <Kpi label={t("Aujourd'hui")} value={money(rep.daily)} accent />
+            <Kpi label={t('Cette semaine')} value={money(rep.weekly)} />
+            <Kpi label={t('Ce mois')} value={money(rep.monthly)} />
+            <Kpi label={t('Base clients')} value={rep.crmCount === null ? '—' : String(rep.crmCount)} />
           </div>
 
           <div className="card">
             <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">
-              Dernières transactions
+              {t('Dernières transactions')}
             </div>
-            {rep.recent.length === 0 && <p className="text-white/40 text-sm">Aucune commande récente.</p>}
+            {rep.recent.length === 0 && <p className="text-white/40 text-sm">{t('Aucune transaction récente.')}</p>}
             {rep.recent.map((o) => (
               <div key={o.name} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm">
                 <div>
                   <div className="font-mono text-azure text-xs">{o.name}</div>
                   <div className="text-white/50 text-xs">
-                    {o.customer || 'Client inconnu'} · {new Date(o.createdAt).toLocaleDateString('fr-FR')}
+                    {o.customer || t('Client inconnu')} · {new Date(o.createdAt).toLocaleDateString('fr-FR')}
                   </div>
                 </div>
                 <div className="text-right">
