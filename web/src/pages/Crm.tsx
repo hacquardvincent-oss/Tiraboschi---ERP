@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { useNav } from '../nav';
 import { useToast } from '../toast';
+import { useI18n } from '../i18n';
 
 const COUNTRY_CODE: Record<string, string> = { france: 'FR', 'united states': 'US', 'états-unis': 'US', 'royaume-uni': 'GB', 'united kingdom': 'GB', italie: 'IT', italy: 'IT' };
 
@@ -42,6 +43,7 @@ export function Crm() {
   const [msg, setMsg] = useState('');
   const { goTo, setPosCustomer } = useNav();
   const toast = useToast();
+  const { t } = useI18n();
 
   function choose(c: Customer) {
     const a = c.defaultAddress;
@@ -136,13 +138,13 @@ export function Crm() {
     return (
       <div className="card">
         <button className="text-white/50 text-sm mb-3" onClick={() => { setSelected(null); setEditing(false); }}>
-          ← Résultats
+          {t('← Résultats')}
         </button>
         <div className="flex items-center justify-between">
           <h2 className="text-base">{fullName(selected)}</h2>
           <div className="flex gap-3 text-sm">
-            <button className="text-azure" onClick={() => { setForm({ firstName: selected.firstName ?? '', lastName: selected.lastName ?? '', email: selected.email ?? '', phone: selected.phone ?? '', note: selected.note ?? '' }); setEditing(!editing); }}>Modifier</button>
-            <button className="btn py-1" onClick={() => choose(selected)}>Choisir →</button>
+            <button className="text-azure" onClick={() => { setForm({ firstName: selected.firstName ?? '', lastName: selected.lastName ?? '', email: selected.email ?? '', phone: selected.phone ?? '', note: selected.note ?? '' }); setEditing(!editing); }}>{t('Modifier')}</button>
+            <button className="btn py-1" onClick={() => choose(selected)}>{t('Choisir')} →</button>
           </div>
         </div>
         <div className="text-white/60 text-sm mb-3">{selected.email || '—'} · {selected.phone || '—'}</div>
@@ -150,30 +152,30 @@ export function Crm() {
         {editing && (
           <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
             <div className="grid grid-cols-2 gap-2">
-              <input className="field" placeholder="Prénom" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
-              <input className="field" placeholder="Nom" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
-              <input className="field" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <input className="field" placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <input className="field" placeholder={t('Prénom')} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+              <input className="field" placeholder={t('Nom')} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+              <input className="field" placeholder={t('Email')} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input className="field" placeholder={t('Téléphone')} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
-            <input className="field" placeholder="Notes" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            <input className="field" placeholder={t('Notes')} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
             <div className="flex gap-2">
-              <button className="btn flex-1" onClick={saveEdit}>Enregistrer</button>
-              <button className="text-white/50 text-sm px-3" onClick={() => setEditing(false)}>Annuler</button>
+              <button className="btn flex-1" onClick={saveEdit}>{t('Enregistrer')}</button>
+              <button className="text-white/50 text-sm px-3" onClick={() => setEditing(false)}>{t('Annuler')}</button>
             </div>
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-          <Info label="Commandes" value={selected.numberOfOrders ?? '0'} />
-          <Info label="Total dépensé" value={money(selected.amountSpent)} />
-          <Info label="Adresse" value={a ? [a.address1, a.zip, a.city, a.country].filter(Boolean).join(', ') : '—'} />
+          <Info label={t('Commandes')} value={selected.numberOfOrders ?? '0'} />
+          <Info label={t('Total dépensé')} value={money(selected.amountSpent)} />
+          <Info label={t('Adresse')} value={a ? [a.address1, a.zip, a.city, a.country].filter(Boolean).join(', ') : '—'} />
         </div>
 
         {missing.length > 0 && (
           <div className="mb-3 text-sm text-amber-400">⚠️ Données manquantes : {missing.join(', ')}</div>
         )}
 
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Habitudes d'achat</div>
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t("Habitudes d'achat")}</div>
         <table className="w-full text-sm">
           <tbody>
             {(selected.orders?.nodes ?? []).map((o) => (
@@ -197,18 +199,18 @@ export function Crm() {
   if (mode === 'new') {
     return (
       <div className="card">
-        <button className="text-white/50 text-sm mb-3" onClick={() => setMode('search')}>← Annuaire</button>
-        <h2 className="text-base mb-3">Nouveau client</h2>
+        <button className="text-white/50 text-sm mb-3" onClick={() => setMode('search')}>{t('← Annuaire')}</button>
+        <h2 className="text-base mb-3">{t('Nouveau client')}</h2>
         <div className="grid grid-cols-2 gap-3">
-          <input className="field" placeholder="Prénom" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
-          <input className="field" placeholder="Nom" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
-          <input className="field" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input className="field" placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <input className="field" placeholder={t('Prénom')} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+          <input className="field" placeholder={t('Nom')} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+          <input className="field" placeholder={t('Email')} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input className="field" placeholder={t('Téléphone')} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         </div>
-        <input className="field mt-3" placeholder="Notes" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        <input className="field mt-3" placeholder={t('Notes')} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         <p className="text-white/40 text-[11px] mt-1">L'adresse postale sera ajoutable à l'étape suivante.</p>
         {err && <p className="text-red-400 text-sm mt-2">{err}</p>}
-        <button className="btn w-full mt-3" onClick={create}>Enregistrer le client</button>
+        <button className="btn w-full mt-3" onClick={create}>{t('Enregistrer le client')}</button>
       </div>
     );
   }
@@ -217,10 +219,10 @@ export function Crm() {
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base">Annuaire clients</h2>
-        <button className="btn" onClick={() => setMode('new')}>+ Nouveau client</button>
+        <h2 className="text-base">{t('Annuaire clients')}</h2>
+        <button className="btn" onClick={() => setMode('new')}>{t('+ Nouveau client')}</button>
       </div>
-      <input className="field mb-2" placeholder="Rechercher (email ou nom)…" value={q} onChange={(e) => search(e.target.value)} />
+      <input className="field mb-2" placeholder={t('Rechercher (email ou nom)…')} value={q} onChange={(e) => search(e.target.value)} />
       {msg && <p className="text-green-400 text-sm">{msg}</p>}
       {err && <p className="text-red-400 text-sm">{err}</p>}
       {!q.trim() && <p className="text-white/40 text-sm mt-2">Saisis une recherche pour afficher des clients.</p>}
@@ -232,8 +234,8 @@ export function Crm() {
               <span className="text-white/50 text-xs">{c.email || '—'} · {c.numberOfOrders ?? '0'} cmd · {money(c.amountSpent)}</span>
             </button>
             <div className="flex gap-2 text-xs">
-              <button className="text-azure" onClick={() => open(c)}>Modifier</button>
-              <button className="px-2 py-1 rounded border border-azure text-azure" onClick={() => choose(c)}>Choisir</button>
+              <button className="text-azure" onClick={() => open(c)}>{t('Modifier')}</button>
+              <button className="px-2 py-1 rounded border border-azure text-azure" onClick={() => choose(c)}>{t('Choisir')}</button>
             </div>
           </div>
         ))}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNav } from '../nav';
 import { useToast } from '../toast';
+import { useI18n } from '../i18n';
 import { Thumb, Button } from '../components/ui';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
@@ -71,6 +72,7 @@ export function Pos() {
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
   const toast = useToast();
+  const { t } = useI18n();
   const setErr = (m: string) => { if (m) toast(m, 'error'); }; // erreurs → toast
   const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe'>('');
   const [saved, setSaved] = useState<SavedSale | null>(null);
@@ -335,9 +337,9 @@ export function Pos() {
     <div className="space-y-4">
       <div className="card">
         <div className="flex items-center justify-between">
-          <h2 className="text-base">Caisse (POS)</h2>
+          <h2 className="text-base">{t('Caisse (POS)')}</h2>
           <span className="text-xs px-2 py-1 rounded border border-white/20">
-            Marché : {currency === 'EUR' ? 'France / EU (TVA 20%)' : 'US (Sales tax)'}
+            {t('Marché')} : {currency === 'EUR' ? 'France / EU (TVA 20%)' : 'US (Sales tax)'}
           </span>
         </div>
       </div>
@@ -345,13 +347,13 @@ export function Pos() {
       {/* Client */}
       <div className="card">
         <button className="w-full flex items-center justify-between mb-2" onClick={() => setClientOpen(!clientOpen)}>
-          <span className="text-xs uppercase tracking-editorial text-white/50">Client {customer.email && <span className="text-white/40 normal-case tracking-normal">· {customer.email}</span>}</span>
+          <span className="text-xs uppercase tracking-editorial text-white/50">{t('Client')} {customer.email && <span className="text-white/40 normal-case tracking-normal">· {customer.email}</span>}</span>
           <span className="text-white/40 text-xs">{clientOpen ? '▾' : '▸'}</span>
         </button>
         <div className={'grid grid-cols-2 gap-3 ' + (clientOpen ? '' : 'hidden')}>
-          <input className="field" placeholder="Prénom" value={customer.firstName} onChange={(e) => setC({ firstName: e.target.value })} />
-          <input className="field" placeholder="Nom" value={customer.lastName} onChange={(e) => setC({ lastName: e.target.value })} />
-          <input className="field col-span-2" type="email" placeholder="Email (obligatoire pour le reçu)" value={customer.email} onChange={(e) => setC({ email: e.target.value })} />
+          <input className="field" placeholder={t('Prénom')} value={customer.firstName} onChange={(e) => setC({ firstName: e.target.value })} />
+          <input className="field" placeholder={t('Nom')} value={customer.lastName} onChange={(e) => setC({ lastName: e.target.value })} />
+          <input className="field col-span-2" type="email" placeholder={t('Email (obligatoire pour le reçu)')} value={customer.email} onChange={(e) => setC({ email: e.target.value })} />
           <div className="flex gap-2 col-span-2">
             <select className="field w-24" value={customer.phoneExt} onChange={(e) => setC({ phoneExt: e.target.value })}>
               <option value="+33">🇫🇷 +33</option>
@@ -359,27 +361,27 @@ export function Pos() {
               <option value="+44">🇬🇧 +44</option>
               <option value="+39">🇮🇹 +39</option>
             </select>
-            <input className="field flex-1" type="tel" placeholder="Téléphone" value={customer.phone} onChange={(e) => setC({ phone: e.target.value })} />
+            <input className="field flex-1" type="tel" placeholder={t('Téléphone')} value={customer.phone} onChange={(e) => setC({ phone: e.target.value })} />
           </div>
-          <input className="field col-span-2" placeholder="Adresse (ligne 1)" value={customer.address1} onChange={(e) => setC({ address1: e.target.value })} />
-          <input className="field col-span-2" placeholder="Appartement, suite… (optionnel)" value={customer.address2} onChange={(e) => setC({ address2: e.target.value })} />
-          <input className="field" placeholder="Ville" value={customer.city} onChange={(e) => setC({ city: e.target.value })} />
-          <input className="field" placeholder="Code postal" value={customer.zip} onChange={(e) => setC({ zip: e.target.value })} />
-          <input className="field" placeholder="État / Province" value={customer.province} onChange={(e) => setC({ province: e.target.value })} />
+          <input className="field col-span-2" placeholder={t('Adresse (ligne 1)')} value={customer.address1} onChange={(e) => setC({ address1: e.target.value })} />
+          <input className="field col-span-2" placeholder={t('Appartement, suite… (optionnel)')} value={customer.address2} onChange={(e) => setC({ address2: e.target.value })} />
+          <input className="field" placeholder={t('Ville')} value={customer.city} onChange={(e) => setC({ city: e.target.value })} />
+          <input className="field" placeholder={t('Code postal')} value={customer.zip} onChange={(e) => setC({ zip: e.target.value })} />
+          <input className="field" placeholder={t('État / Province')} value={customer.province} onChange={(e) => setC({ province: e.target.value })} />
           <select className="field" value={customer.country} onChange={(e) => setC({ country: e.target.value })}>
             <option value="US">États-Unis</option>
             <option value="FR">France</option>
             <option value="GB">Royaume-Uni</option>
             <option value="IT">Italie</option>
           </select>
-          <textarea className="field col-span-2" rows={2} placeholder="Notes sur le client (goûts…)" value={customer.note} onChange={(e) => setC({ note: e.target.value })} />
+          <textarea className="field col-span-2" rows={2} placeholder={t('Notes sur le client (goûts…)')} value={customer.note} onChange={(e) => setC({ note: e.target.value })} />
         </div>
         <div className={'flex gap-4 mt-2 text-xs text-white/70 ' + (clientOpen ? '' : 'hidden')}>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={customer.acceptsEmail} onChange={(e) => setC({ acceptsEmail: e.target.checked })} /> Marketing email
+            <input type="checkbox" checked={customer.acceptsEmail} onChange={(e) => setC({ acceptsEmail: e.target.checked })} /> {t('Marketing email')}
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={customer.acceptsSms} onChange={(e) => setC({ acceptsSms: e.target.checked })} /> Marketing SMS
+            <input type="checkbox" checked={customer.acceptsSms} onChange={(e) => setC({ acceptsSms: e.target.checked })} /> {t('Marketing SMS')}
           </label>
         </div>
       </div>
@@ -387,10 +389,10 @@ export function Pos() {
       {/* Produits */}
       <div className="card">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-xs uppercase tracking-editorial text-white/50">Produit</div>
-          <button className="text-azure text-xs" onClick={() => setShowCustom(!showCustom)}>+ Pièce hors catalogue</button>
+          <div className="text-xs uppercase tracking-editorial text-white/50">{t('Produit')}</div>
+          <button className="text-azure text-xs" onClick={() => setShowCustom(!showCustom)}>{t('+ Pièce hors catalogue')}</button>
         </div>
-        <input className="field" placeholder="Rechercher une référence (SKU ou nom)…" value={q} onChange={(e) => search(e.target.value)} />
+        <input className="field" placeholder={t('Rechercher une référence (SKU ou nom)…')} value={q} onChange={(e) => search(e.target.value)} />
         {results.length > 0 && (
           <div className="mt-2 border border-white/10 rounded divide-y divide-white/10">
             {results.map((p) => (
@@ -404,22 +406,22 @@ export function Pos() {
         )}
         {showCustom && (
           <div className="mt-2 border border-white/10 rounded p-3 flex gap-2 items-end">
-            <input className="field flex-1" placeholder="Désignation (ex. Sur-mesure)" value={customName} onChange={(e) => setCustomName(e.target.value)} />
-            <input className="field w-28" type="number" step="0.01" placeholder={'Prix HT ' + sym} value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} />
-            <button className="btn" onClick={addCustom}>Ajouter</button>
+            <input className="field flex-1" placeholder={t('Désignation (ex. Sur-mesure)')} value={customName} onChange={(e) => setCustomName(e.target.value)} />
+            <input className="field w-28" type="number" step="0.01" placeholder={t('Prix HT') + ' ' + sym} value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} />
+            <button className="btn" onClick={addCustom}>{t('Ajouter')}</button>
           </div>
         )}
       </div>
 
       {/* Panier */}
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Panier</div>
-        {cart.length === 0 && <p className="text-white/40 text-sm">Panier vide.</p>}
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Panier')}</div>
+        {cart.length === 0 && <p className="text-white/40 text-sm">{t('Panier vide.')}</p>}
         {cart.map((l) => (
           <div key={l.uid} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm gap-2">
             <Thumb src={l.imageUrl} alt={l.name} size={36} />
             <div className="flex-1 min-w-0">
-              <div className="font-mono text-azure text-xs">{l.sku || 'HORS CATALOGUE'}</div>
+              <div className="font-mono text-azure text-xs">{l.sku || t('HORS CATALOGUE')}</div>
               <div className="truncate">{l.name}</div>
               {(() => {
                 const a = l.sku ? cartAvail?.lines.find((x) => x.sku === l.sku) : null;
@@ -439,41 +441,41 @@ export function Pos() {
         {currency === 'USD' && (
           <div className="flex items-center gap-4 mt-3 text-sm flex-wrap">
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={ddp} onChange={(e) => setDdp(e.target.checked)} /> Expédié DDP
+              <input type="checkbox" checked={ddp} onChange={(e) => setDdp(e.target.checked)} /> {t('Expédié DDP')}
             </label>
             {ddp && (
               <span className="flex items-center gap-1">
-                Port <input className="field w-20 py-1" value={shipping} onChange={(e) => setShipping(e.target.value)} />
+                {t('Port')} <input className="field w-20 py-1" value={shipping} onChange={(e) => setShipping(e.target.value)} />
               </span>
             )}
             {!taxQuote && (
               <span className="flex items-center gap-1">
-                Sales tax % (est.) <input className="field w-16 py-1" value={usTaxRate} onChange={(e) => setUsTaxRate(e.target.value)} />
+                {t('Sales tax % (est.)')} <input className="field w-16 py-1" value={usTaxRate} onChange={(e) => setUsTaxRate(e.target.value)} />
               </span>
             )}
             <button className="px-2 py-1 rounded border border-azure text-azure" onClick={computeTax} disabled={taxBusy}>
-              {taxBusy ? 'Calcul…' : 'Calculer la taxe (Shopify)'}
+              {taxBusy ? t('Calcul…') : t('Calculer la taxe (Shopify)')}
             </button>
           </div>
         )}
 
         <div className="mt-3 text-sm space-y-1">
-          <Row label="Sous-total HT" value={fmt(subtotal)} />
-          {ddp && <Row label="Frais de port (DDP)" value={fmt(ship)} />}
+          <Row label={t('Sous-total HT')} value={fmt(subtotal)} />
+          {ddp && <Row label={t('Frais de port (DDP)')} value={fmt(ship)} />}
           {taxQuote
             ? taxQuote.lines.map((t, i) => (
                 <Row key={i} label={`${t.title}${t.rate ? ' (' + (t.rate * 100).toFixed(2) + '%)' : ''}`} value={fmt(t.amountCents / 100)} />
               ))
             : <Row label={currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)'} value={fmt(tax)} />}
           <div className="flex justify-between font-semibold text-azure pt-1 border-t border-white/10">
-            <span>Total {currency === 'EUR' ? 'TTC' : 'taxes comprises'}</span>
+            <span>{t('Total')} {currency === 'EUR' ? 'TTC' : t('taxes comprises')}</span>
             <span>{fmt(total)}</span>
           </div>
           {cartAvail && cart.length > 0 && (
             <div className="flex justify-between text-xs pt-1">
-              <span className="text-white/50">Livraison estimée au client</span>
+              <span className="text-white/50">{t('Livraison estimée au client')}</span>
               <span className={cartAvail.readyDate ? 'text-white/80' : 'text-red-400'}>
-                {cartAvail.readyDate ? '~' + fmtDate(cartAvail.readyDate) : 'à confirmer (voir lignes)'}
+                {cartAvail.readyDate ? '~' + fmtDate(cartAvail.readyDate) : t('à confirmer (voir lignes)')}
               </span>
             </div>
           )}
@@ -495,10 +497,10 @@ export function Pos() {
           {tpeStatus && <p className="text-azure text-sm">{tpeStatus}</p>}
           {payLink && (
             <div className="mt-1 space-y-2">
-              <div className="text-xs uppercase tracking-editorial text-white/50">Lien de paiement</div>
+              <div className="text-xs uppercase tracking-editorial text-white/50">{t('Lien de paiement')}</div>
               <input className="field text-xs" readOnly value={payLink} onFocus={(e) => e.currentTarget.select()} />
               <div className="flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => navigator.clipboard?.writeText(payLink)}>📋 Copier</Button>
+                <Button variant="secondary" className="flex-1" onClick={() => navigator.clipboard?.writeText(payLink)}>📋 {t('Copier')}</Button>
                 <Button variant="secondary" className="flex-1" onClick={shareWhatsapp}>💬 WhatsApp</Button>
               </div>
               <p className="text-white/40 text-[11px]">
@@ -507,7 +509,7 @@ export function Pos() {
             </div>
           )}
           {saved && (
-            <button className="text-gold text-sm mt-3" onClick={newSale}>+ Nouvelle vente</button>
+            <button className="text-gold text-sm mt-3" onClick={newSale}>{t('+ Nouvelle vente')}</button>
           )}
         </div>
       )}
@@ -517,21 +519,21 @@ export function Pos() {
         <div className="card border-gold/30 flex items-center gap-3 shadow-lg">
           <div className="flex-1 min-w-0">
             <div className="text-[10px] uppercase tracking-editorial text-white/40">
-              Total {currency === 'EUR' ? 'TTC' : 'taxes comprises'}
+              {t('Total')} {currency === 'EUR' ? 'TTC' : t('taxes comprises')}
             </div>
             <div className="text-xl font-semibold text-gold leading-none">{fmt(total)}</div>
             {cartAvail && cart.length > 0 && cartAvail.readyDate && (
-              <div className="text-[11px] text-white/40 mt-0.5">Livrable ~{fmtDate(cartAvail.readyDate)}</div>
+              <div className="text-[11px] text-white/40 mt-0.5">{t('Livrable ~')}{fmtDate(cartAvail.readyDate)}</div>
             )}
           </div>
-          <Button variant="secondary" onClick={onSave} loading={busy === 'save'} disabled={busy !== '' || cart.length === 0} title="Enregistrer sans encaisser">
-            Enreg.
+          <Button variant="secondary" onClick={onSave} loading={busy === 'save'} disabled={busy !== '' || cart.length === 0} title={t('Enregistrer')}>
+            {t('Enreg.')}
           </Button>
           <Button variant="secondary" onClick={onPaymentLink} loading={busy === 'link'} disabled={busy !== '' || cart.length === 0}>
-            Lien
+            {t('Lien')}
           </Button>
           <Button variant="primary" className="px-5 py-3" onClick={onTpe} loading={busy === 'tpe'} disabled={busy !== '' || cart.length === 0}>
-            Encaisser TPE
+            {t('Encaisser TPE')}
           </Button>
         </div>
       </div>

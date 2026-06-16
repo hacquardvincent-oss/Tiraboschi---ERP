@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../toast';
+import { useI18n } from '../i18n';
 import { EmptyState } from '../components/ui';
 
 interface Sale {
@@ -27,6 +28,7 @@ const STATUS_LABEL: Record<Sale['status'], string> = {
 
 export function Sales() {
   const toast = useToast();
+  const { t } = useI18n();
   const [sales, setSales] = useState<Sale[]>([]);
   const [q, setQ] = useState('');
   const [err, setErr] = useState('');
@@ -118,17 +120,17 @@ export function Sales() {
 
   return (
     <div className="card">
-      <h2 className="text-base mb-3">Ventes</h2>
-      <input className="field mb-3" placeholder="Rechercher (réf, client, commande)…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <h2 className="text-base mb-3">{t('Ventes')}</h2>
+      <input className="field mb-3" placeholder={t('Rechercher (réf, client, commande)…')} value={q} onChange={(e) => setQ(e.target.value)} />
       {err && <p className="text-red-400 text-sm mb-2">{err}</p>}
       <table className="w-full text-sm">
         <thead className="text-white/50 text-left">
           <tr>
-            <th className="py-1">Réf / Date</th>
-            <th className="py-1">Client</th>
-            <th className="py-1">Total</th>
-            <th className="py-1">Statut</th>
-            <th className="py-1">Shopify</th>
+            <th className="py-1">{t('Réf / Date')}</th>
+            <th className="py-1">{t('Client')}</th>
+            <th className="py-1">{t('Total')}</th>
+            <th className="py-1">{t('Statut')}</th>
+            <th className="py-1">{t('Shopify')}</th>
             <th className="py-1"></th>
           </tr>
         </thead>
@@ -141,15 +143,15 @@ export function Sales() {
               </td>
               <td className="py-1.5">{s.customerName || s.customerEmail || '—'}</td>
               <td className="py-1.5">{fmt(s)}</td>
-              <td className="py-1.5">{STATUS_LABEL[s.status]}</td>
+              <td className="py-1.5">{t(STATUS_LABEL[s.status])}</td>
               <td className="py-1.5">
                 {s.shopifyOrderName ? (
                   <span className="text-green-400">{s.shopifyOrderName}</span>
                 ) : s.status === 'PAID' ? (
                   s.syncStatus === 'FAILED' ? (
-                    <span className="text-red-400" title={s.syncError ?? ''}>échec sync</span>
+                    <span className="text-red-400" title={s.syncError ?? ''}>{t('échec sync')}</span>
                   ) : (
-                    <span className="text-white/50">sync…</span>
+                    <span className="text-white/50">{t('sync…')}</span>
                   )
                 ) : (
                   <span className="text-white/30">—</span>
@@ -159,10 +161,10 @@ export function Sales() {
                 {s.status === 'PENDING' && (
                   <div className="flex gap-3 justify-end">
                     <button className="text-azure" disabled={busy === s.id} onClick={() => genLink(s.id)}>
-                      {busy === s.id ? '…' : s.paymentUrl ? 'Lien ↻' : 'Lien'}
+                      {busy === s.id ? '…' : s.paymentUrl ? t('Lien') + ' ↻' : t('Lien')}
                     </button>
                     <button className="text-white/60" disabled={busy === s.id} onClick={() => pay(s.id)}>
-                      Encaisser
+                      {t('Encaisser')}
                     </button>
                   </div>
                 )}
@@ -170,14 +172,14 @@ export function Sales() {
                   <div className="flex gap-3 justify-end items-center">
                     {s.syncStatus === 'FAILED' && (
                       <button className="text-amber-400" disabled={busy === s.id} onClick={() => resync(s.id)}>
-                        {busy === s.id ? '…' : 'Resync'}
+                        {busy === s.id ? '…' : t('Resync')}
                       </button>
                     )}
-                    <button className="text-white/60" disabled={busy === s.id} onClick={() => refund(s.id)}>Rembourser</button>
+                    <button className="text-white/60" disabled={busy === s.id} onClick={() => refund(s.id)}>{t('Rembourser')}</button>
                   </div>
                 )}
                 {s.status === 'PENDING' && (
-                  <button className="text-red-400/70 mt-1" disabled={busy === s.id} onClick={() => cancel(s.id)}>Annuler</button>
+                  <button className="text-red-400/70 mt-1" disabled={busy === s.id} onClick={() => cancel(s.id)}>{t('Annuler')}</button>
                 )}
               </td>
             </tr>
@@ -185,7 +187,7 @@ export function Sales() {
           {filtered.length === 0 && (
             <tr>
               <td colSpan={6}>
-                <EmptyState title="Aucune vente" hint="Enregistre une commande depuis le POS." />
+                <EmptyState title={t('Aucune vente')} hint={t('Enregistre une commande depuis le POS.')} />
               </td>
             </tr>
           )}

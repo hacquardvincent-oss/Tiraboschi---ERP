@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useI18n } from '../i18n';
 
 /**
  * Petite librairie de composants UI cohérents (design system « The Blue Sole » — luxe).
@@ -91,6 +92,7 @@ export function Thumb({ src, alt = '', size = 40 }: { src?: string | null; alt?:
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 export function Tabs<T extends string>({ tabs, active, onChange }: { tabs: [T, string][]; active: T; onChange: (t: T) => void }) {
+  const { t } = useI18n();
   return (
     <div className="flex gap-2 flex-wrap text-sm">
       {tabs.map(([k, label]) => (
@@ -99,7 +101,7 @@ export function Tabs<T extends string>({ tabs, active, onChange }: { tabs: [T, s
           className={'px-3 py-1 rounded border transition-colors ' + (active === k ? 'border-gold text-gold' : 'border-white/20 text-white/60 hover:border-white/40')}
           onClick={() => onChange(k)}
         >
-          {label}
+          {t(label)}
         </button>
       ))}
     </div>
