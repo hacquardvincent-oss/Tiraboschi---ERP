@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNav } from '../nav';
 import { useToast } from '../toast';
 import { useI18n } from '../i18n';
@@ -73,8 +73,17 @@ export function Pos() {
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
   const toast = useToast();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const setErr = (m: string) => { if (m) toast(m, 'error'); }; // erreurs → toast
+  const zipRef = useRef<HTMLInputElement>(null);
+  const [zipError, setZipError] = useState(false);
+  // Le drapeau du téléphone suit la langue de l'app.
+  useEffect(() => { setCustomer((c) => ({ ...c, phoneExt: lang === 'fr' ? '+33' : '+1' })); }, [lang]);
+  function focusZip() {
+    setZipError(true);
+    setClientOpen(true);
+    setTimeout(() => { zipRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); zipRef.current?.focus(); }, 60);
+  }
   const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe'>('');
   const [saved, setSaved] = useState<SavedSale | null>(null);
   const [clientOpen, setClientOpen] = useState(true);
@@ -133,6 +142,7 @@ export function Pos() {
 
   async function computeTax() {
     if (cart.length === 0) return setErr('Panier vide.');
+    if (!customer.zip.trim()) { setErr('Saisis le code postal pour calculer la taxe.'); return focusZip(); }
     if (!customer.country) return setErr('Pays du client requis pour le calcul des taxes.');
     setTaxBusy(true);
     setErr('');
@@ -217,11 +227,16 @@ export function Pos() {
     return `⚠ ${a.note ?? 'indisponible'}`;
   };
 
-  /** Validation minimale : email (reçu) ; adresse complète si expédition DDP. */
+  /** Validation : email (reçu) ; code postal obligatoire en US (taxe) ; adresse si DDP. */
   function validate(): string | null {
     if (!customer.email.trim()) return 'Email client requis (pour le reçu).';
-    if (ddp && (!customer.address1.trim() || !customer.city.trim() || !customer.zip.trim()))
-      return 'Adresse, ville et code postal requis pour une expédition DDP.';
+    if (currency === 'USD' && !customer.zip.trim()) {
+      focusZip();
+      return 'Code postal obligatoire (calcul de la Sales Tax US).';
+    }
+    if (ddp && (!customer.address1.trim() || !customer.city.trim())) {
+      return 'Adresse et ville requises pour une expédition DDP.';
+    }
     return null;
   }
 
@@ -368,7 +383,16 @@ export function Pos() {
           <input className="field col-span-2" placeholder={t('Adresse (ligne 1)')} value={customer.address1} onChange={(e) => setC({ address1: e.target.value })} />
           <input className="field col-span-2" placeholder={t('Appartement, suite… (optionnel)')} value={customer.address2} onChange={(e) => setC({ address2: e.target.value })} />
           <input className="field" placeholder={t('Ville')} value={customer.city} onChange={(e) => setC({ city: e.target.value })} />
-          <input className="field" placeholder={t('Code postal')} value={customer.zip} onChange={(e) => setC({ zip: e.target.value })} />
+          <div>
+            <input
+              ref={zipRef}
+              className={'field ' + (zipError ? 'border-red-500' : '')}
+              placeholder={t('Code postal') + (currency === 'USD' ? ' *' : '')}
+              value={customer.zip}
+              onChange={(e) => { setZipError(false); setC({ zip: e.target.value }); }}
+            />
+            {zipError && <p className="text-red-400 text-[11px] mt-1">{t('Code postal obligatoire (taxe US).')}</p>}
+          </div>
           <input className="field" placeholder={t('État / Province')} value={customer.province} onChange={(e) => setC({ province: e.target.value })} />
           <select className="field" value={customer.country} onChange={(e) => setC({ country: e.target.value })}>
             <option value="US">États-Unis</option>

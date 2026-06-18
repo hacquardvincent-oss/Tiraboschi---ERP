@@ -77,6 +77,7 @@ const EN: Record<string, string> = {
   'Appartement, suite… (optionnel)': 'Apartment, suite… (optional)',
   'Ville': 'City',
   'Code postal': 'Zip code',
+  'Code postal obligatoire (taxe US).': 'Zip code required (US tax).',
   'État / Province': 'State / Province',
   'Notes sur le client (goûts…)': 'Customer notes (tastes…)',
   'Marketing email': 'Email marketing',
