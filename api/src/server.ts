@@ -24,6 +24,7 @@ import { processPendingSales } from './services/sales';
 import { dbHealthRouter } from './routes/dbHealth';
 import { erpUiRouter } from './routes/erpUi';
 import { passportRouter } from './routes/passport';
+import { receiptRouter } from './routes/receipt';
 import { reconcile } from './services/reconciliation';
 import { sendAlert } from './services/alert';
 import { seedAdmin } from './services/seed';
@@ -94,6 +95,7 @@ app.use('/api/pos/sales', salesRouter);
 app.use('/api/db', dbHealthRouter);
 app.use('/app', erpUiRouter);
 app.use('/passport', passportRouter);
+app.use('/receipt', receiptRouter);
 
 // Fallback SPA : toute route non-/api renvoie l'app React (client-side).
 app.get(/^(?!\/api\/).*/, (_req, res) => {

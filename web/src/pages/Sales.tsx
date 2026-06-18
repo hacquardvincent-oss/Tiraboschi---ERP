@@ -175,6 +175,7 @@ export function Sales() {
                         {busy === s.id ? '…' : t('Resync')}
                       </button>
                     )}
+                    <a className="text-azure" href={'/receipt/' + s.id} target="_blank" rel="noreferrer">{t('Reçu')}</a>
                     <button className="text-white/60" disabled={busy === s.id} onClick={() => refund(s.id)}>{t('Rembourser')}</button>
                   </div>
                 )}

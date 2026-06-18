@@ -518,7 +518,10 @@ export function Pos() {
             </div>
           )}
           {saved && (
-            <button className="text-gold text-sm mt-3" onClick={newSale}>{t('+ Nouvelle vente')}</button>
+            <div className="flex items-center gap-4 mt-3">
+              <a className="text-azure text-sm" href={'/receipt/' + saved.id} target="_blank" rel="noreferrer">{t('Reçu')} ↗</a>
+              <button className="text-gold text-sm" onClick={newSale}>{t('+ Nouvelle vente')}</button>
+            </div>
           )}
         </div>
       )}

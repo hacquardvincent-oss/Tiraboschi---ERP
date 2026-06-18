@@ -105,6 +105,7 @@ const EN: Record<string, string> = {
   'Annulée': 'Cancelled',
   'Remboursée': 'Refunded',
   'Aucune vente': 'No sales',
+  'Reçu': 'Receipt',
   'Réf / Date': 'Ref / Date',
   'Shopify': 'Shopify',
   'échec sync': 'sync failed',
