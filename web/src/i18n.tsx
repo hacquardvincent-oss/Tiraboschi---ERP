@@ -276,6 +276,8 @@ const EN: Record<string, string> = {
   '← Catalogue': '← Catalog',
   'SKU généré': 'Generated SKU',
   'Nom produit *': 'Product name *',
+  'Vignettes': 'Thumbnails',
+  'Liste': 'List',
 };
 
 interface I18nCtx {

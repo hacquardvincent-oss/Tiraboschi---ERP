@@ -124,6 +124,7 @@ export function Collection() {
   const [info, setInfo] = useState('');
   const [saving, setSaving] = useState(false);
   const [listMode, setListMode] = useState<'edit' | 'avail' | 'check'>('edit');
+  const [gridView, setGridView] = useState(true);
   const [check, setCheck] = useState<{ total: number; incomplete: number; items: { id: string; sku: string; name: string; status: string; missing: string[] }[] } | null>(null);
   const [catalog, setCatalog] = useState<Avail[] | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -357,15 +358,21 @@ export function Collection() {
       </div>
 
       {listMode === 'edit' && (
-        <input
-          className="field mb-3"
-          placeholder={t('Rechercher (SKU ou nom)…')}
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            load(e.target.value);
-          }}
-        />
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            className="field flex-1"
+            placeholder={t('Rechercher (SKU ou nom)…')}
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              load(e.target.value);
+            }}
+          />
+          <div className="flex gap-1 shrink-0">
+            <button className={'px-3 rounded border text-sm ' + (gridView ? 'border-gold text-gold' : 'border-white/20 text-white/50')} style={{ minHeight: 44 }} title={t('Vignettes')} onClick={() => setGridView(true)}>▦</button>
+            <button className={'px-3 rounded border text-sm ' + (!gridView ? 'border-gold text-gold' : 'border-white/20 text-white/50')} style={{ minHeight: 44 }} title={t('Liste')} onClick={() => setGridView(false)}>≣</button>
+          </div>
+        </div>
       )}
       {err && <p className="text-red-400 text-sm">{err}</p>}
 
@@ -403,7 +410,20 @@ export function Collection() {
         <p className="py-3 text-white/40 text-sm">Aucune fiche. Crée-en une avec « + Nouveau modèle ».</p>
       )}
 
-      {listMode === 'edit' && Object.entries(tree).map(([model, mats]) => {
+      {/* Galerie de vignettes (PLM) : tuiles image groupées par modèle, clic → fiche */}
+      {listMode === 'edit' && gridView && Object.entries(tree).map(([model, mats]) => {
+        const decls = Object.values(mats).flatMap((o) => Object.values(o)).flat();
+        return (
+          <div key={model} className="mb-5">
+            <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{model} <span className="text-white/30">· {decls.length}</span></div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {decls.map((p) => <ProductTile key={p.id} p={p} onClick={() => edit(p.id)} />)}
+            </div>
+          </div>
+        );
+      })}
+
+      {listMode === 'edit' && !gridView && Object.entries(tree).map(([model, mats]) => {
         const isCollapsed = collapsed[model];
         const count = Object.values(mats).flatMap((o) => Object.values(o)).flat().length;
         return (
@@ -453,8 +473,15 @@ export function Collection() {
       const mat = materials.find((m) => m.id === l.materialId);
       return s + (mat?.unitCost && l.quantity ? Number(mat.unitCost) * Number(l.quantity) : 0);
     }, 0);
+    // PRI (prix de revient) & marge — coût matière = saisie manuelle, sinon nomenclature valorisée.
+    const num = (s: string) => { const n = Number(s); return Number.isFinite(n) ? n : 0; };
+    const costMat = num(form.costMaterial) || bomTotal;
+    const pri = costMat + num(form.costMaking);
+    const priceEur = num(form.priceHtEur);
+    const margeEur = priceEur - pri;
+    const margePct = priceEur > 0 ? (margeEur / priceEur) * 100 : 0;
     return (
-      <div className="card">
+      <div className="card animate-fadeup">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base">{editingId ? t('Fiche technique') : t('Nouvelle fiche technique')}</h2>
           <button className="text-white/50 text-sm" onClick={() => setView('list')}>{t('← Catalogue')}</button>
@@ -565,6 +592,12 @@ export function Collection() {
           <F label="Coût façon"><input className="field" type="number" step="0.01" value={form.costMaking} onChange={setInput('costMaking')} /></F>
           <F label="Duties + shipping $"><input className="field" type="number" step="0.01" value={form.dutiesShippingUsd} onChange={setInput('dutiesShippingUsd')} /></F>
           <F label="Prix final DDP"><input className="field" type="number" step="0.01" value={form.finalPriceDdp} onChange={setInput('finalPriceDdp')} /></F>
+          <div className="col-span-2 rounded bg-white/5 p-2 text-xs flex flex-wrap gap-x-6 gap-y-1 items-center">
+            <span className="text-white/50">PRI (coût de revient) : <b className="text-white/80">{pri.toFixed(2)} €</b></span>
+            <span className="text-white/50">Marge : <b className={margeEur >= 0 ? 'text-green-300' : 'text-red-300'}>{margeEur.toFixed(2)} €</b></span>
+            <span className="text-white/50">Taux de marge : <b className={margePct >= 0 ? 'text-green-300' : 'text-red-300'}>{margePct.toFixed(1)} %</b></span>
+            {!form.costMaterial && bomTotal > 0 && <span className="text-white/30">(coût matière = nomenclature valorisée)</span>}
+          </div>
         </Section>
 
         <Section title="7. Logistique & douanes">
@@ -640,6 +673,32 @@ function CatalogAvail({ catalog }: { catalog: Avail[] | null }) {
         );
       })}
     </div>
+  );
+}
+
+// Tuile de vignette PLM : image carrée + zoom au survol, SKU, statut, prix.
+function ProductTile({ p, onClick }: { p: Product; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="group text-left rounded border border-white/10 overflow-hidden hover:border-gold/50 transition-colors"
+    >
+      <div className="aspect-square bg-white/5 overflow-hidden">
+        {p.imageUrl ? (
+          <img src={p.imageUrl} alt={p.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gold/30 text-2xl">◇</div>
+        )}
+      </div>
+      <div className="p-2">
+        <div className="font-mono text-azure text-[11px] truncate">{p.sku}</div>
+        <div className="text-xs truncate">{p.name}</div>
+        <div className="flex items-center justify-between mt-1">
+          <StatusBadge status={p.status} />
+          <span className="text-white/60 text-xs">{p.priceHtUsd ? '$' + p.priceHtUsd : '—'}</span>
+        </div>
+      </div>
+    </button>
   );
 }
 
