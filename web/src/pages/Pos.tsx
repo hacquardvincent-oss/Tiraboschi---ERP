@@ -88,6 +88,7 @@ export function Pos() {
   const [saved, setSaved] = useState<SavedSale | null>(null);
   const [clientOpen, setClientOpen] = useState(true);
   const [payLink, setPayLink] = useState('');
+  const [showShare, setShowShare] = useState(false);
   const [tpeStatus, setTpeStatus] = useState('');
 
   const [cartAvail, setCartAvail] = useState<{ readyDate: string | null; lines: CartAvailLine[] } | null>(null);
@@ -329,11 +330,10 @@ export function Pos() {
     setBusy('link');
     try {
       const s = await ensureSale();
-      const res = await api<{ url: string }>(`/api/pos/sales/${s.id}/payment-link`, {
-        method: 'POST',
-        body: {},
-      });
-      setPayLink(res.url);
+      await api<{ url: string }>(`/api/pos/sales/${s.id}/payment-link`, { method: 'POST', body: {} });
+      // Lien partagé = page de redirection brandée (téléphone-safe), pas l'URL Stripe brute.
+      setPayLink(`${location.origin}/pay/${s.id}`);
+      setShowShare(true);
       toast('Lien de paiement généré.', 'success');
     } catch (e) {
       setErr((e as Error).message);
@@ -395,12 +395,18 @@ export function Pos() {
     setErr('');
   }
 
+  const shareMsg = () => `Votre lien de paiement Tiraboschi : ${payLink}`;
+  const phoneDigits = () => `${customer.phoneExt}${customer.phone}`.replace(/\D/g, '');
   function shareWhatsapp() {
     if (!payLink) return;
-    window.open(
-      'https://wa.me/?text=' + encodeURIComponent('Votre lien de paiement Tiraboschi : ' + payLink),
-      '_blank',
-    );
+    const to = customer.phone ? phoneDigits() : '';
+    window.open(`https://wa.me/${to}?text=${encodeURIComponent(shareMsg())}`, '_blank');
+  }
+  function shareEmail() {
+    window.open(`mailto:${customer.email}?subject=${encodeURIComponent('Votre commande Tiraboschi')}&body=${encodeURIComponent(shareMsg())}`);
+  }
+  function shareSms() {
+    window.open(`sms:${customer.phone ? phoneDigits() : ''}?&body=${encodeURIComponent(shareMsg())}`);
   }
 
   return (
@@ -629,6 +635,26 @@ export function Pos() {
           </Button>
         </div>
       </div>
+
+      {/* Pop-in de partage du lien de paiement */}
+      {showShare && payLink && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4" onClick={() => setShowShare(false)}>
+          <div className="card w-full max-w-sm animate-fadeup" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs uppercase tracking-editorial text-white/50">{t('Envoyer le lien de paiement')}</div>
+              <button className="text-white/50" onClick={() => setShowShare(false)}>✕</button>
+            </div>
+            <input className="field text-xs mb-3" readOnly value={payLink} onFocus={(e) => e.currentTarget.select()} />
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="primary" onClick={shareWhatsapp}>💬 WhatsApp</Button>
+              <Button variant="secondary" onClick={shareEmail}>✉️ {t('Email')}</Button>
+              <Button variant="secondary" onClick={shareSms}>💬 SMS</Button>
+              <Button variant="secondary" onClick={() => { navigator.clipboard?.writeText(payLink); toast(t('Copié'), 'success'); }}>📋 {t('Copier')}</Button>
+            </div>
+            <p className="text-white/40 text-[11px] mt-3">{t('Le client ouvre une page de chargement Tiraboschi puis le paiement sécurisé.')}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
