@@ -286,33 +286,47 @@ export async function getReports(): Promise<DashboardReports> {
 }
 
 // ─── Backfill des visuels produits depuis Shopify (par SKU de variante) ───────
-interface ProductsImagesResult {
+interface ProductsDataResult {
   products: {
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
-    nodes: { featuredImage: { url: string } | null; variants: { nodes: { sku: string | null }[] } }[];
+    nodes: { featuredImage: { url: string } | null; variants: { nodes: { sku: string | null; price: string | null }[] } }[];
   };
 }
-/** Construit une map SKU → URL d'image (image principale du produit Shopify). */
-export async function fetchProductImagesBySku(): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+export interface ShopVariantData {
+  url?: string;
+  price?: string;
+}
+/**
+ * Construit une map SKU → { image, prix } depuis Shopify, + la devise de la boutique.
+ * Le prix de variante est exprimé dans la devise de la boutique (souvent EUR pour Tiraboschi).
+ */
+export async function fetchVariantDataBySku(): Promise<{ currency: string; map: Map<string, ShopVariantData> }> {
+  const shopRes = await shopifyGraphQL<{ shop: { currencyCode: string } }>(`{ shop { currencyCode } }`);
+  const currency = shopRes.shop.currencyCode;
+  const map = new Map<string, ShopVariantData>();
   let cursor: string | null = null;
   for (let i = 0; i < 30; i++) {
     const query = `query($cursor: String) {
       products(first: 100, after: $cursor) {
         pageInfo { hasNextPage endCursor }
-        nodes { featuredImage { url } variants(first: 100) { nodes { sku } } }
+        nodes { featuredImage { url } variants(first: 100) { nodes { sku price } } }
       }
     }`;
-    const d: ProductsImagesResult = await shopifyGraphQL<ProductsImagesResult>(query, { cursor });
+    const d: ProductsDataResult = await shopifyGraphQL<ProductsDataResult>(query, { cursor });
     for (const p of d.products.nodes) {
       const url = p.featuredImage?.url;
-      if (!url) continue;
-      for (const v of p.variants.nodes) if (v.sku) map.set(v.sku, url);
+      for (const v of p.variants.nodes) {
+        if (!v.sku) continue;
+        const entry = map.get(v.sku) ?? {};
+        if (url) entry.url = url;
+        if (v.price) entry.price = v.price;
+        map.set(v.sku, entry);
+      }
     }
     if (!d.products.pageInfo.hasNextPage) break;
     cursor = d.products.pageInfo.endCursor;
   }
-  return map;
+  return { currency, map };
 }
 
 // ─── Annulation d'une commande Shopify (best-effort) ──────────────────────────

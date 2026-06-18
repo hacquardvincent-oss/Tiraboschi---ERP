@@ -133,8 +133,8 @@ export function Collection() {
   async function importImages() {
     setImporting(true);
     try {
-      const r = await api<{ updated: number; shopifyImages: number }>('/api/products/import-images', { method: 'POST', body: {} });
-      toast(`${r.updated} visuel(s) importé(s) depuis Shopify.`, r.updated ? 'success' : 'info');
+      const r = await api<{ images: number; prices: number; currency: string }>('/api/products/import-images', { method: 'POST', body: {} });
+      toast(`Shopify : ${r.images} visuel(s), ${r.prices} prix (${r.currency}) importés.`, r.images || r.prices ? 'success' : 'info');
       load(q);
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -312,7 +312,7 @@ export function Collection() {
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base">Collection</h2>
         <div className="flex gap-2">
-          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={importImages} disabled={importing}>{t('Images Shopify')}</button>
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={importImages} disabled={importing}>{t('Sync Shopify')}</button>
           <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>{t('Importer CSV')}</button>
           <button className="btn" onClick={newSheet}>{t('+ Nouveau modèle')}</button>
         </div>

@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { assembleSku } from '../services/sku';
-import { syncProductToShopify, fetchProductImagesBySku } from '../services/shopify';
+import { syncProductToShopify, fetchVariantDataBySku } from '../services/shopify';
 import { importCatalogCsv, importTechSheetsCsv } from '../services/import';
 import { computeAvailability } from '../services/atp';
 
@@ -112,20 +112,26 @@ productsRouter.post('/import', async (req, res) => {
   }
 });
 
-// Backfill des visuels produits depuis Shopify (par SKU)
+// Sync depuis Shopify (par SKU) : visuel + prix (devise boutique → EUR ou USD)
 productsRouter.post('/import-images', async (_req, res) => {
   try {
-    const map = await fetchProductImagesBySku();
+    const { currency, map } = await fetchVariantDataBySku();
     const products = await prisma.product.findMany({ select: { id: true, sku: true } });
-    let updated = 0;
+    let images = 0;
+    let prices = 0;
     for (const p of products) {
-      const url = map.get(p.sku);
-      if (url) {
-        await prisma.product.update({ where: { id: p.id }, data: { imageUrl: url } });
-        updated++;
+      const d = map.get(p.sku);
+      if (!d) continue;
+      const data: Record<string, unknown> = {};
+      if (d.url) { data.imageUrl = d.url; images++; }
+      if (d.price) {
+        if (currency === 'EUR') data.priceHtEur = d.price;
+        else if (currency === 'USD') data.priceHtUsd = d.price;
+        prices++;
       }
+      if (Object.keys(data).length) await prisma.product.update({ where: { id: p.id }, data });
     }
-    res.json({ updated, shopifyImages: map.size });
+    res.json({ updated: images, images, prices, currency, shopifyImages: map.size });
   } catch (e) {
     res.status(502).json({ error: (e as Error).message });
   }
