@@ -69,7 +69,7 @@ export function Pos() {
     setCustomer((c) => ({ ...c, ...patch }));
     setTaxQuote(null); // l'adresse change → la taxe calculée n'est plus valable
   };
-  const [usTaxRate, setUsTaxRate] = useState('8'); // estimation, % (la taxe exacte sera calculée par Shopify à l'encaissement)
+  const [usTaxRate] = useState('8'); // estimation d'attente (taxe exacte calculée par Shopify à la validation)
   const [ddp, setDdp] = useState(false);
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
   const toast = useToast();
@@ -249,6 +249,12 @@ export function Pos() {
     } finally {
       setBusy('');
     }
+  }
+
+  /** « Valider l'adresse » : déclenche le calcul de taxe Shopify (US) ; TVA fixe en FR. */
+  async function validateAddress() {
+    if (currency === 'USD') return computeTax();
+    toast('Adresse validée — TVA 20% appliquée.', 'success');
   }
 
   /** Validation : email (reçu) ; code postal obligatoire en US (taxe) ; adresse si DDP. */
@@ -458,9 +464,14 @@ export function Pos() {
           </label>
         </div>
         {clientOpen && (
-          <button className="text-azure text-sm mt-3" disabled={busy === 'cust'} onClick={saveCustomer}>
-            {busy === 'cust' ? '…' : t('Enregistrer le client')}
-          </button>
+          <div className="mt-3 space-y-2">
+            <button className="btn w-full" disabled={taxBusy} onClick={validateAddress}>
+              {taxBusy ? t('Calcul…') : t("Valider l'adresse (calcul des taxes)")}
+            </button>
+            <button className="text-azure text-sm" disabled={busy === 'cust'} onClick={saveCustomer}>
+              {busy === 'cust' ? '…' : t('Enregistrer le client')}
+            </button>
+          </div>
         )}
       </div>
 
@@ -474,7 +485,7 @@ export function Pos() {
           </div>
         </div>
         {showConfig ? (
-          <Configurator currency={currency} onAdd={(p) => { add(p); setShowConfig(false); }} />
+          <Configurator currency={currency} onAdd={(p) => { add(p); toast(p.name + ' ajouté.', 'success'); }} />
         ) : (
         <input className="field" placeholder={t('Rechercher une référence (SKU ou nom)…')} value={q} onChange={(e) => search(e.target.value)} />
         )}
@@ -523,26 +534,15 @@ export function Pos() {
           </div>
         ))}
 
-        {currency === 'USD' && (
-          <div className="flex items-center gap-4 mt-3 text-sm flex-wrap">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={ddp} onChange={(e) => setDdp(e.target.checked)} /> {t('Expédié DDP')}
-            </label>
-            {ddp && (
-              <span className="flex items-center gap-1">
-                {t('Port')} <input className="field w-20 py-1" value={shipping} onChange={(e) => setShipping(e.target.value)} />
-              </span>
-            )}
-            {!taxQuote && (
-              <span className="flex items-center gap-1">
-                {t('Sales tax % (est.)')} <input className="field w-16 py-1" value={usTaxRate} onChange={(e) => setUsTaxRate(e.target.value)} />
-              </span>
-            )}
-            <button className="px-2 py-1 rounded border border-azure text-azure" onClick={computeTax} disabled={taxBusy}>
-              {taxBusy ? t('Calcul…') : t('Calculer la taxe (Shopify)')}
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 mt-3 text-sm flex-wrap">
+          <button className={'px-3 py-1.5 rounded border ' + (!ddp ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setDdp(false)}>{t('Sur place')}</button>
+          <button className={'px-3 py-1.5 rounded border ' + (ddp ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setDdp(true)}>{t('À distance')}</button>
+          {ddp && (
+            <span className="flex items-center gap-1 text-xs text-white/60">
+              {t('Frais de port')} <input className="field w-20 py-1" value={shipping} onChange={(e) => setShipping(e.target.value)} />
+            </span>
+          )}
+        </div>
 
         <div className="mt-3 text-sm space-y-1">
           <Row label={t('Sous-total HT')} value={fmt(subtotal)} />
@@ -565,9 +565,7 @@ export function Pos() {
             </div>
           )}
           {currency === 'USD' && !taxQuote && (
-            <p className="text-white/40 text-[11px]">
-              Taxe estimée. Clique « Calculer la taxe (Shopify) » après avoir saisi l'adresse pour le détail exact par juridiction.
-            </p>
+            <p className="text-amber-400 text-[11px]">⚠ {t('Saisissez le code postal et validez l’adresse pour calculer les Sales Tax.')}</p>
           )}
           {taxQuote && <p className="text-green-400/70 text-[11px]">Taxe réelle calculée par Shopify pour l'adresse saisie.</p>}
         </div>
