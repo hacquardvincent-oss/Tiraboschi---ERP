@@ -84,7 +84,7 @@ export function Pos() {
     setClientOpen(true);
     setTimeout(() => { zipRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); zipRef.current?.focus(); }, 60);
   }
-  const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe'>('');
+  const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe' | 'cust' | 'draft'>('');
   const [saved, setSaved] = useState<SavedSale | null>(null);
   const [clientOpen, setClientOpen] = useState(true);
   const [payLink, setPayLink] = useState('');
@@ -192,7 +192,7 @@ export function Pos() {
   const [customName, setCustomName] = useState('');
   const [customPrice, setCustomPrice] = useState('');
   const [showCustom, setShowCustom] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
+  const [showConfig, setShowConfig] = useState(true); // catalogue (navigation) affiché par défaut
   const addCustom = () => {
     const price = parseFloat(customPrice) || 0;
     if (!customName.trim() || price <= 0) return setErr('Nom et prix de la pièce hors catalogue requis.');
@@ -226,6 +226,30 @@ export function Pos() {
     if (a.path === 'production') return `Sur commande · livrable ~${fmtDate(a.readyDate)}`;
     return `⚠ ${a.note ?? 'indisponible'}`;
   };
+
+  /** Enregistre le client dans Shopify : crée si nouveau, met à jour si existant (avec confirmation, pas d'écrasement silencieux). */
+  async function saveCustomer() {
+    const email = customer.email.trim();
+    if (!email) return setErr('Email requis pour enregistrer le client.');
+    setBusy('cust');
+    try {
+      const phone = customer.phone ? `${customer.phoneExt}${customer.phone}` : undefined;
+      const d = await api<{ customers: { nodes: { id: string; email: string | null }[] } }>('/api/crm/search?q=' + encodeURIComponent(email));
+      const existing = d.customers.nodes.find((c) => (c.email ?? '').toLowerCase() === email.toLowerCase());
+      if (existing) {
+        if (!confirm('Un client avec cet email existe déjà. Mettre à jour ses informations ?')) { setBusy(''); return; }
+        await api('/api/crm/customer', { method: 'PUT', body: { id: existing.id, firstName: customer.firstName, lastName: customer.lastName, phone, note: customer.note } });
+        toast('Client mis à jour.', 'success');
+      } else {
+        await api('/api/crm/customer', { method: 'POST', body: { firstName: customer.firstName, lastName: customer.lastName, email, phone, note: customer.note } });
+        toast('Client créé.', 'success');
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
 
   /** Validation : email (reçu) ; code postal obligatoire en US (taxe) ; adresse si DDP. */
   function validate(): string | null {
@@ -410,6 +434,11 @@ export function Pos() {
             <input type="checkbox" checked={customer.acceptsSms} onChange={(e) => setC({ acceptsSms: e.target.checked })} /> {t('Marketing SMS')}
           </label>
         </div>
+        {clientOpen && (
+          <button className="text-azure text-sm mt-3" disabled={busy === 'cust'} onClick={saveCustomer}>
+            {busy === 'cust' ? '…' : t('Enregistrer le client')}
+          </button>
+        )}
       </div>
 
       {/* Produits */}
@@ -417,7 +446,7 @@ export function Pos() {
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs uppercase tracking-editorial text-white/50">{t('Produit')}</div>
           <div className="flex gap-3">
-            <button className={'text-xs ' + (showConfig ? 'text-gold' : 'text-azure')} onClick={() => setShowConfig(!showConfig)}>{t('Configurateur')}</button>
+            <button className="text-azure text-xs" onClick={() => setShowConfig(!showConfig)}>{showConfig ? t('Recherche') : t('Catalogue')}</button>
             <button className="text-azure text-xs" onClick={() => setShowCustom(!showCustom)}>{t('+ Pièce hors catalogue')}</button>
           </div>
         </div>

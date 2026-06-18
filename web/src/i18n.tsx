@@ -58,6 +58,7 @@ const EN: Record<string, string> = {
   'Marché': 'Market',
   'Produit': 'Product',
   'Configurateur': 'Configurator',
+  'Recherche': 'Search',
   '+ Pièce hors catalogue': '+ Off-catalog item',
   'Rechercher une référence (SKU ou nom)…': 'Search a reference (SKU or name)…',
   'Désignation (ex. Sur-mesure)': 'Description (e.g. Bespoke)',
