@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Tabs } from '../components/ui';
+import { Tabs, Thumb } from '../components/ui';
 import { useToast } from '../toast';
 import { useI18n } from '../i18n';
 
@@ -68,14 +68,6 @@ interface FulfillTask {
 }
 const FULFILL_NEXT: Record<string, string> = { TO_PREPARE: 'READY', READY: 'SHIPPED' };
 const FULFILL_FR: Record<string, string> = { TO_PREPARE: 'À préparer', READY: 'Prête', SHIPPED: 'Expédiée' };
-
-interface PieceReceipt {
-  id: string;
-  reference: string;
-  quantity: number;
-  receivedAt: string;
-  productionOrder?: { variantSku: string; workshop?: { name: string } | null } | null;
-}
 
 type Tab = 'dashboard' | 'materials' | 'production' | 'planning' | 'pieces' | 'workshops';
 
@@ -630,26 +622,81 @@ function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
   );
 }
 
+interface FinStock {
+  sku: string;
+  count: number;
+  name: string;
+  imageUrl: string | null;
+}
+interface SerialItem {
+  id: string;
+  serial: string;
+  variantSku: string;
+  status: string;
+  location: string | null;
+}
+
 function PiecesTab({ onErr }: { onErr: (s: string) => void }) {
-  const [pieces, setPieces] = useState<PieceReceipt[]>([]);
+  const [stock, setStock] = useState<FinStock[]>([]);
+  const [openSku, setOpenSku] = useState<string | null>(null);
+  const [serials, setSerials] = useState<SerialItem[]>([]);
+
+  const reload = () => api<FinStock[]>('/api/erp/finished-stock').then(setStock).catch((e) => onErr((e as Error).message));
   useEffect(() => {
-    api<PieceReceipt[]>('/api/erp/finished-pieces').then(setPieces).catch((e) => onErr((e as Error).message));
+    reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function toggle(sku: string) {
+    if (openSku === sku) return setOpenSku(null);
+    setOpenSku(sku);
+    api<SerialItem[]>('/api/erp/serials?sku=' + encodeURIComponent(sku))
+      .then((all) => setSerials(all.filter((s) => s.status === 'AVAILABLE')))
+      .catch((e) => onErr((e as Error).message));
+  }
+  async function exceptionalOut(id: string) {
+    if (!confirm('Sortie exceptionnelle de cette pièce (casse / perte / échantillon) ?')) return;
+    try {
+      await api('/api/erp/serials/' + id, { method: 'PATCH', body: { status: 'RETURNED', location: 'sortie exceptionnelle' } });
+      setSerials((s) => s.filter((x) => x.id !== id));
+      reload();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  const passportUrl = (serial: string) => `${location.origin}/passport/${encodeURIComponent(serial)}`;
+  const qr = (serial: string) => `https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=0&data=${encodeURIComponent(passportUrl(serial))}`;
+
   return (
     <div className="card">
-      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Réceptions de pièces finies</div>
-      {pieces.length === 0 && <p className="text-white/40 text-sm">Aucune réception de pièces.</p>}
-      {pieces.map((p) => (
-        <div key={p.id} className="flex justify-between py-1.5 text-sm border-b border-white/10">
-          <div>
-            <div className="font-mono text-xs text-azure">{p.reference}</div>
-            <div className="text-white/50 text-xs">{p.productionOrder?.variantSku ?? '—'} · {p.productionOrder?.workshop?.name ?? '—'}</div>
-          </div>
-          <div className="text-right">
-            <div>×{p.quantity}</div>
-            <div className="text-white/40 text-[11px]">{new Date(p.receivedAt).toLocaleDateString('fr-FR')}</div>
-          </div>
+      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Stock pièces (entrepôt)</div>
+      {stock.length === 0 && <p className="text-white/40 text-sm">Aucune pièce en stock.</p>}
+      {stock.map((g) => (
+        <div key={g.sku} className="border-b border-white/10">
+          <button className="w-full flex items-center gap-3 py-2 text-sm text-left" onClick={() => toggle(g.sku)}>
+            <Thumb src={g.imageUrl} alt={g.name} size={36} />
+            <div className="flex-1 min-w-0">
+              <div className="truncate">{g.name}</div>
+              <div className="font-mono text-azure text-[11px]">{g.sku}</div>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/15 text-gold">{g.count} pièce(s)</span>
+            <span className="text-white/40 text-xs">{openSku === g.sku ? '▾' : '▸'}</span>
+          </button>
+          {openSku === g.sku && (
+            <div className="pb-2 pl-2 space-y-2">
+              {serials.map((s) => (
+                <div key={s.id} className="flex items-center gap-3 text-xs border border-white/10 rounded p-2">
+                  <img src={qr(s.serial)} alt="QR" width={56} height={56} className="rounded bg-white p-0.5 shrink-0" loading="lazy" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-white/80 break-all">{s.serial}</div>
+                    <a className="text-azure" href={passportUrl(s.serial)} target="_blank" rel="noreferrer">Passeport ↗</a>
+                  </div>
+                  <button className="text-red-400/70" onClick={() => exceptionalOut(s.id)}>Sortie</button>
+                </div>
+              ))}
+              {serials.length === 0 && <p className="text-white/40 text-xs">Aucun n° de série disponible.</p>}
+            </div>
+          )}
         </div>
       ))}
     </div>

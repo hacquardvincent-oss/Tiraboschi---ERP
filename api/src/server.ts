@@ -23,6 +23,7 @@ import { stripeWebhookRouter } from './routes/stripeWebhook';
 import { processPendingSales } from './services/sales';
 import { dbHealthRouter } from './routes/dbHealth';
 import { erpUiRouter } from './routes/erpUi';
+import { passportRouter } from './routes/passport';
 import { reconcile } from './services/reconciliation';
 import { sendAlert } from './services/alert';
 import { seedAdmin } from './services/seed';
@@ -92,6 +93,7 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/pos/sales', salesRouter);
 app.use('/api/db', dbHealthRouter);
 app.use('/app', erpUiRouter);
+app.use('/passport', passportRouter);
 
 // Fallback SPA : toute route non-/api renvoie l'app React (client-side).
 app.get(/^(?!\/api\/).*/, (_req, res) => {

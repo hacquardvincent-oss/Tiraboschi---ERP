@@ -421,6 +421,53 @@ erpRouter.post('/purchase-orders/:id/receive', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// ─── Stock pièces finies par déclinaison (n° de série AVAILABLE) ──────────────
+erpRouter.get('/finished-stock', async (_req, res) => {
+  try {
+    const groups = await prisma.serial.groupBy({ by: ['variantSku'], where: { status: 'AVAILABLE' }, _count: { _all: true } });
+    const products = await prisma.product.findMany({
+      where: { sku: { in: groups.map((g) => g.variantSku) } },
+      select: { sku: true, name: true, imageUrl: true },
+    });
+    const bySku = new Map(products.map((p) => [p.sku, p]));
+    res.json(
+      groups
+        .map((g) => ({
+          sku: g.variantSku,
+          count: g._count._all,
+          name: bySku.get(g.variantSku)?.name ?? g.variantSku,
+          imageUrl: bySku.get(g.variantSku)?.imageUrl ?? null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+  } catch (e) { fail(res, e); }
+});
+
+// Liste des n° de série (optionnellement filtrés par SKU)
+erpRouter.get('/serials', async (req, res) => {
+  const sku = req.query.sku ? String(req.query.sku) : undefined;
+  res.json(
+    await prisma.serial.findMany({
+      where: sku ? { variantSku: sku } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+    }),
+  );
+});
+
+// Mise à jour d'un n° de série (statut / localisation) — ex. sortie exceptionnelle
+erpRouter.patch('/serials/:id', async (req, res) => {
+  const { status, location } = req.body ?? {};
+  try {
+    res.json(
+      await prisma.serial.update({
+        where: { id: req.params.id },
+        data: { ...(status ? { status } : {}), ...(location !== undefined ? { location } : {}) },
+      }),
+    );
+  } catch (e) { fail(res, e); }
+});
+
 // ─── Stock pièces finies (réceptions) ─────────────────────────────────────────
 erpRouter.get('/finished-pieces', async (_req, res) => {
   res.json(
