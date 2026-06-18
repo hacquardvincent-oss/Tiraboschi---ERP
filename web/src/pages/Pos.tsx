@@ -3,6 +3,7 @@ import { useNav } from '../nav';
 import { useToast } from '../toast';
 import { useI18n } from '../i18n';
 import { Thumb, Button } from '../components/ui';
+import { Configurator } from '../components/Configurator';
 import { api } from '../lib/api';
 import { useCurrency } from '../store';
 import { chargeOnReader } from '../lib/terminal';
@@ -181,6 +182,7 @@ export function Pos() {
   const [customName, setCustomName] = useState('');
   const [customPrice, setCustomPrice] = useState('');
   const [showCustom, setShowCustom] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const addCustom = () => {
     const price = parseFloat(customPrice) || 0;
     if (!customName.trim() || price <= 0) return setErr('Nom et prix de la pièce hors catalogue requis.');
@@ -390,9 +392,16 @@ export function Pos() {
       <div className="card">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs uppercase tracking-editorial text-white/50">{t('Produit')}</div>
-          <button className="text-azure text-xs" onClick={() => setShowCustom(!showCustom)}>{t('+ Pièce hors catalogue')}</button>
+          <div className="flex gap-3">
+            <button className={'text-xs ' + (showConfig ? 'text-gold' : 'text-azure')} onClick={() => setShowConfig(!showConfig)}>{t('Configurateur')}</button>
+            <button className="text-azure text-xs" onClick={() => setShowCustom(!showCustom)}>{t('+ Pièce hors catalogue')}</button>
+          </div>
         </div>
+        {showConfig ? (
+          <Configurator currency={currency} onAdd={(p) => { add(p); setShowConfig(false); }} />
+        ) : (
         <input className="field" placeholder={t('Rechercher une référence (SKU ou nom)…')} value={q} onChange={(e) => search(e.target.value)} />
+        )}
         {results.length > 0 && (
           <div className="mt-2 border border-white/10 rounded divide-y divide-white/10">
             {results.map((p) => (
