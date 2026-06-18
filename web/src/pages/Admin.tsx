@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { api, apiDownload } from '../lib/api';
 import { Tabs } from '../components/ui';
 import { useI18n } from '../i18n';
 
@@ -155,7 +155,7 @@ function RefAdmin() {
   const [showImport, setShowImport] = useState(false);
   const [impCat, setImpCat] = useState('');
   const [impCsv, setImpCsv] = useState('');
-  const [impMulti, setImpMulti] = useState(false);
+  const [impMode, setImpMode] = useState<'full' | 'single' | 'multi'>('full');
   const [editId, setEditId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
 
@@ -203,7 +203,9 @@ function RefAdmin() {
     if (!impCsv.trim()) return setErr('CSV requis.');
     try {
       let r: { created: number; updated: number; skipped: number };
-      if (impMulti) {
+      if (impMode === 'full') {
+        r = await api('/api/ref/import-full', { method: 'POST', body: { csv: impCsv } });
+      } else if (impMode === 'multi') {
         r = await api('/api/ref/import-multi', { method: 'POST', body: { csv: impCsv } });
       } else {
         const category = (impCat || cat).trim();
@@ -215,6 +217,30 @@ function RefAdmin() {
       const c = await api<string[]>('/api/ref/categories');
       setCats(c);
       reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  async function exportCsv() {
+    setErr('');
+    try {
+      await apiDownload('/api/ref/export', 'referentiel.csv');
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  // Générateur d'ID : calcule le prochain code de la catégorie courante (restaure le comportement V1).
+  async function generateCode() {
+    setErr('');
+    if (!cat) return;
+    // Indice de préfixe : couleurs/tailles/options/années = numérique pur.
+    const numeric = ['colors', 'sizes', 'options', 'years', 'optionTypes'].includes(cat);
+    const qs = numeric ? '?prefix=' : '';
+    try {
+      const r = await api<{ code: string }>('/api/ref/' + encodeURIComponent(cat) + '/next-code' + qs);
+      setCode(r.code);
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -243,7 +269,10 @@ function RefAdmin() {
     <div className="card">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base">{t('Admin — Référentiel (base de données)')}</h2>
-        <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>{t('Importer CSV')}</button>
+        <div className="flex gap-2">
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={exportCsv}>{t('Exporter CSV')}</button>
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>{t('Importer CSV')}</button>
+        </div>
       </div>
       <p className="text-white/40 text-xs mb-4">
         Les valeurs qui pré-remplissent les formulaires (Collection, POS…).
@@ -251,14 +280,22 @@ function RefAdmin() {
 
       {showImport && (
         <div className="border border-white/10 rounded p-3 mb-4 space-y-2">
-          <label className="flex items-center gap-2 text-xs text-white/70">
-            <input type="checkbox" checked={impMulti} onChange={(e) => setImpMulti(e.target.checked)} />
-            Multi-catégories (1 colonne = 1 catégorie ; en-tête = nom de catégorie)
-          </label>
-          <div className="text-xs text-white/50">{impMulti ? 'Chaque colonne devient une liste (valeurs = entrées).' : 'Une catégorie ; colonnes reconnues : code et/ou label (code = libellé si absent).'}</div>
-          {!impMulti && <input className="field" placeholder="Catégorie (ex. ateliers, suppliers, animalTypes…)" value={impCat || cat} onChange={(e) => setImpCat(e.target.value)} />}
+          <div className="flex gap-2 text-xs">
+            {([['full', 'Base complète'], ['single', 'Une catégorie'], ['multi', 'Multi-colonnes']] as ['full' | 'single' | 'multi', string][]).map(([m, lbl]) => (
+              <label key={m} className={'px-2 py-1 rounded border cursor-pointer ' + (impMode === m ? 'border-azure text-azure' : 'border-white/20 text-white/50')}>
+                <input type="radio" className="hidden" checked={impMode === m} onChange={() => setImpMode(m)} />
+                {t(lbl)}
+              </label>
+            ))}
+          </div>
+          <div className="text-xs text-white/50">
+            {impMode === 'full' && 'Toute la base en un seul fichier — colonnes : category;code;label (format identique à l’export, pour corriger/réimporter en masse).'}
+            {impMode === 'single' && 'Une seule catégorie ; colonnes reconnues : code et/ou label (code = libellé si absent).'}
+            {impMode === 'multi' && 'Chaque colonne devient une liste (en-tête = nom de catégorie ; valeurs = entrées).'}
+          </div>
+          {impMode === 'single' && <input className="field" placeholder="Catégorie (ex. ateliers, suppliers, animalTypes…)" value={impCat || cat} onChange={(e) => setImpCat(e.target.value)} />}
           <input type="file" accept=".csv,text/csv" className="text-xs" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(setImpCsv); }} />
-          <textarea className="field font-mono text-[11px]" rows={3} placeholder="code;label  (ou label seul)" value={impCsv} onChange={(e) => setImpCsv(e.target.value)} />
+          <textarea className="field font-mono text-[11px]" rows={3} placeholder={impMode === 'full' ? 'category;code;label' : impMode === 'multi' ? 'colonne1;colonne2…' : 'code;label  (ou label seul)'} value={impCsv} onChange={(e) => setImpCsv(e.target.value)} />
           <button className="btn" onClick={runImport}>Importer</button>
         </div>
       )}
@@ -273,9 +310,12 @@ function RefAdmin() {
       </select>
 
       <div className="flex gap-2 items-end mb-3">
-        <div className="w-28">
+        <div className="w-40">
           <label className="block text-xs font-semibold mb-1">{t('Code / ID')}</label>
-          <input className="field" value={code} onChange={(e) => setCode(e.target.value)} placeholder="AA009" />
+          <div className="flex gap-1">
+            <input className="field font-mono" value={code} onChange={(e) => setCode(e.target.value)} placeholder="AA009" />
+            <button type="button" className="px-2 rounded border border-white/20 text-white/70 text-xs whitespace-nowrap" onClick={generateCode} title={t('Calculer le prochain ID')}>{t('Générer')}</button>
+          </div>
         </div>
         <div className="flex-1">
           <label className="block text-xs font-semibold mb-1">{t('Libellé')}</label>

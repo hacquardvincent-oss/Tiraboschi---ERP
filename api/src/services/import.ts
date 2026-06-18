@@ -314,6 +314,55 @@ export async function importTechSheetsCsv(text: string): Promise<ImportResult> {
 }
 
 /**
+ * Import « base complète » : un seul CSV normalisé pour TOUT le référentiel.
+ * Colonnes : category;code;label[;sortOrder] (1 ligne = 1 entrée). C'est le format
+ * miroir de l'export (round-trip : exporter → corriger dans Excel → réimporter en masse).
+ * Idempotent : upsert par (category, code). Lignes incomplètes ignorées.
+ */
+export async function importRefFullCsv(text: string): Promise<ImportResult> {
+  const rows = parseCsv(text);
+  const res: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+  for (const row of rows) {
+    const category = col(row, 'category', 'catégorie', 'categorie', 'liste');
+    const label = col(row, 'label', 'libellé', 'libelle', 'nom', 'name');
+    const code = col(row, 'code', 'id') || label;
+    const sortRaw = col(row, 'sortorder', 'sort order', 'ordre', 'tri');
+    if (!category || !code || !label) {
+      res.skipped++;
+      continue;
+    }
+    const sortOrder = sortRaw != null ? parseInt(sortRaw.replace(/[^0-9-]/g, ''), 10) : NaN;
+    const hasSort = Number.isFinite(sortOrder);
+    try {
+      const existing = await prisma.refItem.findUnique({ where: { category_code: { category, code } } });
+      await prisma.refItem.upsert({
+        where: { category_code: { category, code } },
+        create: { category, code, label, ...(hasSort ? { sortOrder } : {}) },
+        update: { label, ...(hasSort ? { sortOrder } : {}) },
+      });
+      existing ? res.updated++ : res.created++;
+    } catch (e) {
+      res.errors.push(`${category}/${code}: ${(e as Error).message}`);
+    }
+  }
+  return res;
+}
+
+/**
+ * Exporte TOUT le référentiel en un CSV normalisé (category;code;label;sortOrder),
+ * trié par catégorie puis code. Miroir de `importRefFullCsv` pour le round-trip.
+ */
+export async function exportRefCsv(): Promise<string> {
+  const items = await prisma.refItem.findMany({ orderBy: [{ category: 'asc' }, { code: 'asc' }] });
+  const esc = (s: string) => (/[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s);
+  const lines = ['category;code;label;sortOrder'];
+  for (const it of items) {
+    lines.push([it.category, it.code, it.label, String(it.sortOrder)].map(esc).join(';'));
+  }
+  return lines.join('\n');
+}
+
+/**
  * Importe une liste de référentiel (une catégorie) depuis un CSV.
  * Colonnes reconnues : code/id (optionnel) + label/nom/libellé. Code auto = label si absent.
  * Idempotent : upsert par (category, code).

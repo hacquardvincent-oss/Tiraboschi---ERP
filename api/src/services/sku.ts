@@ -67,3 +67,40 @@ export function nextColorId(existingIds: string[]): string {
   }
   return String(max + 1).padStart(3, '0');
 }
+
+/**
+ * Calcule le prochain code d'une catégorie de référentiel à partir des codes existants.
+ * Détecte automatiquement un préfixe alphabétique (ex. modèles "AA", matières "CU") et la
+ * largeur numérique, puis incrémente le plus grand numéro. Codes purement numériques
+ * (couleurs) → prochain entier zero-paddé (ignore 999, réservé au Noir).
+ * `prefixHint` force un préfixe (ex. "CE" pour matière exceptionnelle, "" pour numérique).
+ * Restaure le comportement V1 : l'ID est CALCULÉ, jamais saisi en texte libre.
+ */
+export function nextRefCode(existingCodes: string[], prefixHint?: string): string {
+  const codes = existingCodes.map((c) => (c || '').trim().toUpperCase()).filter(Boolean);
+  const numericOnly = codes.length > 0 && codes.every((c) => /^\d+$/.test(c));
+
+  // Détermine le préfixe alpha : hint explicite, sinon le plus fréquent parmi les codes.
+  let prefix = prefixHint != null ? prefixHint.toUpperCase() : '';
+  if (prefixHint == null && !numericOnly) {
+    const freq = new Map<string, number>();
+    for (const c of codes) {
+      const p = c.match(/^[A-Z]+/)?.[0] ?? '';
+      if (p) freq.set(p, (freq.get(p) ?? 0) + 1);
+    }
+    prefix = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+  }
+
+  // Largeur numérique = max des longueurs de la partie chiffrée (plancher à 3).
+  const re = new RegExp(`^${prefix}(\\d+)$`);
+  let max = 0;
+  let width = 3;
+  for (const c of codes) {
+    const m = c.match(re);
+    if (!m) continue;
+    width = Math.max(width, m[1].length);
+    const n = parseInt(m[1], 10);
+    if (n !== 999) max = Math.max(max, n);
+  }
+  return prefix + String(max + 1).padStart(width, '0');
+}

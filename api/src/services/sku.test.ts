@@ -6,6 +6,7 @@ import {
   deriveMaterialPrefix,
   nextSequentialId,
   nextColorId,
+  nextRefCode,
 } from './sku';
 
 describe('moteur SKU (CDC)', () => {
@@ -56,5 +57,26 @@ describe('moteur SKU (CDC)', () => {
     expect(nextColorId(['001', '002', '999'])).toBe('003');
     expect(nextColorId(['999'])).toBe('001');
     expect(nextColorId([])).toBe('001');
+  });
+
+  describe('nextRefCode (générateur d’ID par catégorie)', () => {
+    it('couleurs : numérique pur, ignore 999, paddé 3 chiffres', () => {
+      expect(nextRefCode(['001', '002', '999'])).toBe('003');
+      expect(nextRefCode([], '')).toBe('001');
+    });
+    it('modèles : détecte le préfixe alpha et incrémente', () => {
+      expect(nextRefCode(['AA001', 'AA002'])).toBe('AA003');
+      expect(nextRefCode(['AA001', 'AB001', 'AA002'])).toBe('AA003'); // préfixe le plus fréquent
+    });
+    it('matières : préfixe forcé (CU / CE)', () => {
+      expect(nextRefCode(['CU001', 'CU007'], 'CU')).toBe('CU008');
+      expect(nextRefCode([], 'CE')).toBe('CE001');
+    });
+    it('liste vide sans indice → 001', () => {
+      expect(nextRefCode([])).toBe('001');
+    });
+    it('ignore les codes en texte libre (« chaine laiton ») pour ne pas casser le calcul', () => {
+      expect(nextRefCode(['001', 'chaine laiton', '002'], '')).toBe('003');
+    });
   });
 });

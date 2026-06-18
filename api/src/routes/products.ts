@@ -55,7 +55,7 @@ productsRouter.get('/', async (req, res) => {
   const where = q
     ? { OR: [{ sku: { contains: q, mode: 'insensitive' as const } }, { name: { contains: q, mode: 'insensitive' as const } }] }
     : undefined;
-  res.json(await prisma.product.findMany({ where, orderBy: { updatedAt: 'desc' }, take: 300 }));
+  res.json(await prisma.product.findMany({ where, orderBy: { sku: 'asc' }, take: 300 }));
 });
 
 // Contrôle qualité : fiches incomplètes (données manquantes importantes pour la vente)

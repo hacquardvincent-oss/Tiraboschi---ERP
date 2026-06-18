@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth, requireRole } from '../middleware/auth';
-import { importRefCsv, importRefMultiCsv } from '../services/import';
+import { importRefCsv, importRefMultiCsv, importRefFullCsv, exportRefCsv } from '../services/import';
+import { nextRefCode } from '../services/sku';
 
 export const refRouter = Router();
 refRouter.use(requireAuth);
@@ -48,6 +49,25 @@ refRouter.post('/import-multi', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
+// Import « base complète » : un seul CSV pour tout le référentiel (category;code;label) — Admin
+refRouter.post('/import-full', requireRole('ADMIN'), async (req, res) => {
+  const { csv } = req.body ?? {};
+  if (typeof csv !== 'string' || !csv.trim()) return res.status(400).json({ error: 'csv requis.' });
+  try {
+    res.json(await importRefFullCsv(csv));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+// Export de toute la base en CSV normalisé (miroir de l'import « base complète »)
+refRouter.get('/export', async (_req, res) => {
+  const csv = await exportRefCsv();
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="referentiel.csv"');
+  res.send(csv);
+});
+
 /** Catégories distinctes du référentiel. */
 refRouter.get('/categories', async (_req, res) => {
   const rows = await prisma.refItem.findMany({
@@ -58,11 +78,21 @@ refRouter.get('/categories', async (_req, res) => {
   res.json(rows.map((r) => r.category));
 });
 
-/** Items d'une catégorie (alimente les listes déroulantes des formulaires). */
+/** Prochain code calculé pour une catégorie (générateur d'ID : couleurs ###, modèles AA###…). */
+refRouter.get('/:category/next-code', async (req, res) => {
+  const items = await prisma.refItem.findMany({
+    where: { category: req.params.category },
+    select: { code: true },
+  });
+  const prefix = req.query.prefix != null ? String(req.query.prefix) : undefined;
+  res.json({ code: nextRefCode(items.map((i) => i.code), prefix) });
+});
+
+/** Items d'une catégorie (alimente les listes déroulantes des formulaires). Tri par code (ID). */
 refRouter.get('/:category', async (req, res) => {
   const items = await prisma.refItem.findMany({
     where: { category: req.params.category },
-    orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
   });
   res.json(items);
 });
