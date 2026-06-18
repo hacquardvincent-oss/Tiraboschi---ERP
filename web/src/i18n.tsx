@@ -278,6 +278,12 @@ const EN: Record<string, string> = {
   'Nom produit *': 'Product name *',
   'Vignettes': 'Thumbnails',
   'Liste': 'List',
+  'En revue': 'In review',
+  'Validé par': 'Validated by',
+  'Brouillon → En revue → Validé': 'Draft → In review → Validated',
+  'Ajouter un commentaire…': 'Add a comment…',
+  'Enregistre la fiche pour activer les commentaires.': 'Save the sheet to enable comments.',
+  'Aucun commentaire.': 'No comments.',
 };
 
 interface I18nCtx {

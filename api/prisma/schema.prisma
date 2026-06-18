@@ -50,6 +50,7 @@ model RefItem {
 // ─── PLM : fiche technique produit (Collection) ───────────────────────────────
 enum ProductStatus {
   DRAFT // Brouillon
+  IN_REVIEW // En revue (workflow PLM)
   VALIDATED // Validé
 }
 
@@ -93,13 +94,43 @@ model Product {
 
   // Sync Shopify
   shopifyProductId String?
-  imageUrl         String? // visuel (CDN Shopify)
+  imageUrl         String? // visuel de couverture (CDN Shopify ou 1ʳᵉ image de la galerie)
+
+  // Workflow PLM : traçabilité de la validation
+  validatedAt DateTime?
+  validatedBy String? // email de l'auteur de la validation
 
   bomLines  BomLine[]
+  images    ProductImage[]
+  comments  ProductComment[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([name])
+}
+
+// Galerie d'images d'une fiche produit (médias PLM). La 1ʳᵉ (sortOrder) = couverture.
+model ProductImage {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  url       String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+// Fil de commentaires d'une fiche produit (échanges PLM, validation, retours atelier).
+model ProductComment {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  author    String // email de l'auteur (utilisateur connecté)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([productId])
 }
 
 // Paramètres globaux clé/valeur (frais de port, etc.)

@@ -5,11 +5,18 @@ import { Tabs, Thumb } from '../components/ui';
 import { useToast } from '../toast';
 import { useI18n } from '../i18n';
 
+type ProductStatus = 'DRAFT' | 'IN_REVIEW' | 'VALIDATED';
+interface Comment {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string;
+}
 interface Product {
   id: string;
   sku: string;
   name: string;
-  status: 'DRAFT' | 'VALIDATED';
+  status: ProductStatus;
   modelCode?: string | null;
   materialCode?: string | null;
   optionCode?: string | null;
@@ -74,7 +81,7 @@ const fmtDate = (d: string | null) =>
 
 const EMPTY = {
   name: '',
-  status: 'DRAFT' as 'DRAFT' | 'VALIDATED',
+  status: 'DRAFT' as ProductStatus,
   modelCode: '',
   yearCode: '',
   seasonCode: '',
@@ -118,6 +125,12 @@ export function Collection() {
   const [materials, setMaterials] = useState<MaterialOpt[]>([]);
   const [bomLines, setBomLines] = useState<BomLineForm[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
+  const [newImg, setNewImg] = useState('');
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [validatedBy, setValidatedBy] = useState<string | null>(null);
+  const [validatedAt, setValidatedAt] = useState<string | null>(null);
   const [shopifyId, setShopifyId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [err, setErr] = useState('');
@@ -204,6 +217,12 @@ export function Collection() {
     setForm(EMPTY);
     setBom(emptyBom());
     setBomLines([]);
+    setImages([]);
+    setNewImg('');
+    setComments([]);
+    setNewComment('');
+    setValidatedBy(null);
+    setValidatedAt(null);
     setEditingId(null);
     setShopifyId(null);
     setErr('');
@@ -234,6 +253,13 @@ export function Collection() {
           }))
         : [];
       setBomLines(lines);
+      const imgs = Array.isArray(p.images) ? (p.images as { url: string }[]).map((i) => i.url) : [];
+      setImages(imgs.length ? imgs : (p.imageUrl ? [String(p.imageUrl)] : []));
+      setNewImg('');
+      setComments(Array.isArray(p.comments) ? (p.comments as Comment[]) : []);
+      setNewComment('');
+      setValidatedBy((p.validatedBy as string | null) ?? null);
+      setValidatedAt((p.validatedAt as string | null) ?? null);
       setEditingId(id);
       setShopifyId((p.shopifyProductId as string | null) ?? null);
       setView('form');
@@ -257,12 +283,43 @@ export function Collection() {
         ? await api<{ id: string }>('/api/products/' + editingId, { method: 'PUT', body: body() })
         : await api<{ id: string }>('/api/products', { method: 'POST', body: body() });
       await api('/api/products/' + saved.id + '/bom', { method: 'PUT', body: { lines: bomLines } });
+      await api('/api/products/' + saved.id + '/images', { method: 'PUT', body: { urls: images } });
       setEditingId(saved.id);
+      // Recharge la traçabilité de validation (horodatée côté serveur).
+      const fresh = await api<{ validatedBy: string | null; validatedAt: string | null }>('/api/products/' + saved.id);
+      setValidatedBy(fresh.validatedBy ?? null);
+      setValidatedAt(fresh.validatedAt ?? null);
       setInfo('Fiche enregistrée.');
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  function addImage() {
+    const u = newImg.trim();
+    if (!u) return;
+    setImages((arr) => (arr.includes(u) ? arr : [...arr, u]));
+    setNewImg('');
+  }
+  function removeImage(i: number) {
+    setImages((arr) => arr.filter((_, j) => j !== i));
+  }
+  function makeCover(i: number) {
+    setImages((arr) => (i <= 0 ? arr : [arr[i], ...arr.filter((_, j) => j !== i)]));
+  }
+
+  async function addComment() {
+    const txt = newComment.trim();
+    if (!txt) return;
+    if (!editingId) return setErr('Enregistre la fiche avant de commenter.');
+    try {
+      const c = await api<Comment>('/api/products/' + editingId + '/comments', { method: 'POST', body: { body: txt } });
+      setComments((cs) => [c, ...cs]);
+      setNewComment('');
+    } catch (e) {
+      setErr((e as Error).message);
     }
   }
 
@@ -502,6 +559,34 @@ export function Collection() {
           <F label="Saison"><RefSelect category="seasons" value={form.seasonCode} onChange={set('seasonCode')} /></F>
         </Section>
 
+        <Section title="Médias (galerie)">
+          <div className="col-span-2">
+            {images.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
+                {images.map((url, i) => (
+                  <div key={url + i} className="relative group rounded overflow-hidden border border-white/10">
+                    <div className="aspect-square bg-white/5">
+                      <img src={url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    </div>
+                    {i === 0 && <span className="absolute top-1 left-1 text-[9px] px-1 rounded bg-gold/80 text-ink font-medium">Couverture</span>}
+                    <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {i > 0 ? (
+                        <button type="button" className="text-[10px] text-azure px-1 py-0.5" onClick={() => makeCover(i)} title="Définir comme couverture">★</button>
+                      ) : <span />}
+                      <button type="button" className="text-[10px] text-red-300 px-1 py-0.5" onClick={() => removeImage(i)} title="Retirer">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input className="field flex-1" placeholder="URL d'image (CDN Shopify, Drive…)" value={newImg} onChange={(e) => setNewImg(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addImage(); } }} />
+              <button type="button" className="px-3 rounded border border-white/20 text-white/70 text-sm" onClick={addImage}>+ Ajouter</button>
+            </div>
+            <p className="text-[11px] text-white/30 mt-1">La 1ʳᵉ image sert de couverture (vignette catalogue). Les visuels Shopify sont repris automatiquement.</p>
+          </div>
+        </Section>
+
         <Section title="2. Options fonctionnelles">
           <div className="col-span-2 space-y-2">
             {bom.options.map((o, i) => (
@@ -606,13 +691,41 @@ export function Collection() {
           <F label="Packaging"><input className="field" value={form.packaging} onChange={setInput('packaging')} /></F>
         </Section>
 
-        <Section title="8. Statut">
+        <Section title="8. Workflow & validation">
           <F label="Statut">
             <select className="field" value={form.status} onChange={(e) => set('status')(e.target.value)}>
               <option value="DRAFT">{t('Brouillon')}</option>
+              <option value="IN_REVIEW">{t('En revue')}</option>
               <option value="VALIDATED">{t('Validé')}</option>
             </select>
           </F>
+          <div className="flex items-end">
+            {form.status === 'VALIDATED' && validatedBy ? (
+              <p className="text-[11px] text-green-300/80">{t('Validé par')} {validatedBy}{validatedAt ? ' · ' + fmtDate(validatedAt) : ''}</p>
+            ) : (
+              <p className="text-[11px] text-white/30">{t('Brouillon → En revue → Validé')}</p>
+            )}
+          </div>
+        </Section>
+
+        <Section title="Commentaires">
+          <div className="col-span-2">
+            <div className="flex gap-2 mb-3">
+              <input className="field flex-1" placeholder={t('Ajouter un commentaire…')} value={newComment} onChange={(e) => setNewComment(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addComment(); } }} />
+              <button type="button" className="px-3 rounded border border-white/20 text-white/70 text-sm" onClick={addComment} disabled={!editingId}>{t('Envoyer')}</button>
+            </div>
+            {!editingId && <p className="text-[11px] text-white/30">{t('Enregistre la fiche pour activer les commentaires.')}</p>}
+            {comments.map((c) => (
+              <div key={c.id} className="py-2 border-b border-white/10">
+                <div className="flex justify-between text-[11px] text-white/40">
+                  <span className="text-azure">{c.author}</span>
+                  <span>{fmtDate(c.createdAt)}</span>
+                </div>
+                <div className="text-sm whitespace-pre-wrap">{c.body}</div>
+              </div>
+            ))}
+            {editingId && comments.length === 0 && <p className="text-[11px] text-white/30">{t('Aucun commentaire.')}</p>}
+          </div>
         </Section>
 
         {err && <p className="text-red-400 text-sm mt-2">{err}</p>}
@@ -702,13 +815,13 @@ function ProductTile({ p, onClick }: { p: Product; onClick: () => void }) {
   );
 }
 
-function StatusBadge({ status }: { status: 'DRAFT' | 'VALIDATED' }) {
+function StatusBadge({ status }: { status: ProductStatus }) {
   const { t } = useI18n();
-  return status === 'VALIDATED' ? (
-    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">{t('Validé')}</span>
-  ) : (
-    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">{t('Brouillon')}</span>
-  );
+  if (status === 'VALIDATED')
+    return <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">{t('Validé')}</span>;
+  if (status === 'IN_REVIEW')
+    return <span className="text-[10px] px-1.5 py-0.5 rounded bg-azure/20 text-azure">{t('En revue')}</span>;
+  return <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">{t('Brouillon')}</span>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

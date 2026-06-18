@@ -42,7 +42,7 @@ const DECIMAL_FIELDS = [
 function pickData(b: Record<string, unknown>): Record<string, unknown> {
   const d: Record<string, unknown> = {};
   for (const f of STRING_FIELDS) if (b[f] !== undefined) d[f] = b[f];
-  if (b.status === 'DRAFT' || b.status === 'VALIDATED') d.status = b.status;
+  if (b.status === 'DRAFT' || b.status === 'IN_REVIEW' || b.status === 'VALIDATED') d.status = b.status;
   if (Array.isArray(b.jewelryCodes)) d.jewelryCodes = b.jewelryCodes;
   if (b.bom !== undefined) d.bom = b.bom;
   for (const f of DECIMAL_FIELDS) if (b[f] !== undefined && b[f] !== '' && b[f] !== null) d[f] = b[f];
@@ -85,10 +85,50 @@ productsRouter.get('/incomplete', async (_req, res) => {
 productsRouter.get('/:id', async (req, res) => {
   const p = await prisma.product.findUnique({
     where: { id: req.params.id },
-    include: { bomLines: { include: { material: true } } },
+    include: {
+      bomLines: { include: { material: true } },
+      images: { orderBy: { sortOrder: 'asc' } },
+      comments: { orderBy: { createdAt: 'desc' } },
+    },
   });
   if (!p) return res.status(404).json({ error: 'Fiche introuvable.' });
   res.json(p);
+});
+
+// Galerie d'images (médias PLM) : remplace la liste par les URLs fournies (ordre = position).
+// La 1ʳᵉ image devient la couverture (Product.imageUrl).
+productsRouter.put('/:id/images', async (req, res) => {
+  const urls: string[] = Array.isArray(req.body?.urls)
+    ? (req.body.urls as unknown[]).map((u) => String(u).trim()).filter(Boolean)
+    : [];
+  try {
+    await prisma.$transaction([
+      prisma.productImage.deleteMany({ where: { productId: req.params.id } }),
+      prisma.productImage.createMany({
+        data: urls.map((url, i) => ({ productId: req.params.id, url, sortOrder: i })),
+      }),
+      prisma.product.update({ where: { id: req.params.id }, data: { imageUrl: urls[0] ?? null } }),
+    ]);
+    res.json(await prisma.productImage.findMany({ where: { productId: req.params.id }, orderBy: { sortOrder: 'asc' } }));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+// Fil de commentaires (PLM)
+productsRouter.get('/:id/comments', async (req, res) => {
+  res.json(await prisma.productComment.findMany({ where: { productId: req.params.id }, orderBy: { createdAt: 'desc' } }));
+});
+productsRouter.post('/:id/comments', async (req, res) => {
+  const body = String(req.body?.body ?? '').trim();
+  if (!body) return res.status(400).json({ error: 'Commentaire vide.' });
+  try {
+    const author = req.user?.email ?? 'inconnu';
+    const c = await prisma.productComment.create({ data: { productId: req.params.id, author, body } });
+    res.status(201).json(c);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
 });
 
 // Remplace la nomenclature chiffrée (lignes matière reliées au stock) d'une fiche
@@ -192,6 +232,14 @@ productsRouter.put('/:id', async (req, res) => {
     const merged = { ...existing, ...pickData(b) } as Codes;
     const sku = buildSku(merged);
     const data = { ...pickData(b), sku } as Prisma.ProductUncheckedUpdateInput;
+    // Traçabilité workflow : on horodate le passage à « Validé », on l'efface si on en sort.
+    if (data.status === 'VALIDATED' && existing.status !== 'VALIDATED') {
+      data.validatedAt = new Date();
+      data.validatedBy = req.user?.email ?? null;
+    } else if (data.status && data.status !== 'VALIDATED') {
+      data.validatedAt = null;
+      data.validatedBy = null;
+    }
     res.json(await prisma.product.update({ where: { id: req.params.id }, data }));
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
