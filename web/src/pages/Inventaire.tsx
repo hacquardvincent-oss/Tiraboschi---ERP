@@ -69,7 +69,7 @@ interface FulfillTask {
 const FULFILL_NEXT: Record<string, string> = { TO_PREPARE: 'READY', READY: 'SHIPPED' };
 const FULFILL_FR: Record<string, string> = { TO_PREPARE: 'À préparer', READY: 'Prête', SHIPPED: 'Expédiée' };
 
-type Tab = 'dashboard' | 'materials' | 'production' | 'planning' | 'pieces' | 'workshops';
+type Tab = 'dashboard' | 'materials' | 'production' | 'planning' | 'pieces' | 'workshops' | 'count';
 
 interface PlanGroup {
   workshopId: string;
@@ -158,6 +158,7 @@ export function Inventaire() {
             ['production', 'Production'],
             ['planning', 'Planification'],
             ['pieces', 'Stock pièces'],
+            ['count', 'Inventaire'],
             ['workshops', 'Ateliers'],
           ] as [Tab, string][]}
         />
@@ -168,6 +169,7 @@ export function Inventaire() {
       {tab === 'production' && <ProductionTab onErr={notify} />}
       {tab === 'planning' && <PlanningTab onErr={notify} />}
       {tab === 'pieces' && <PiecesTab onErr={notify} />}
+      {tab === 'count' && <CountTab onErr={notify} />}
       {tab === 'workshops' && <WorkshopsTab onErr={notify} />}
     </div>
   );
@@ -819,6 +821,152 @@ function WorkshopsTab({ onErr }: { onErr: (s: string) => void }) {
           </div>
           <button className="text-azure text-xs" onClick={() => openEdit(w)}>{t('Modifier')}</button>
         </div>
+      ))}
+    </div>
+  );
+}
+
+interface InvSession {
+  id: string;
+  reference: string;
+  category: string | null;
+  status: string;
+  createdAt: string;
+  _count?: { counts: number };
+}
+interface CountLine {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+  theoretical: number;
+  counted: number | null;
+  previous: number | null;
+}
+const CAT_LABEL: Record<string, string> = { LEATHER: 'Peaux', HARDWARE: 'Bijoux', LINING: 'Doublures' };
+
+function CountTab({ onErr }: { onErr: (s: string) => void }) {
+  const [sessions, setSessions] = useState<InvSession[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [lines, setLines] = useState<CountLine[]>([]);
+  const [cat, setCat] = useState('');
+  const [q, setQ] = useState('');
+
+  const reload = () => api<InvSession[]>('/api/erp/inventory-sessions').then(setSessions).catch((e) => onErr((e as Error).message));
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function openSession(id: string) {
+    setOpenId(id);
+    const d = await api<{ lines: CountLine[] }>('/api/erp/inventory-sessions/' + id).catch((e) => { onErr((e as Error).message); return null; });
+    if (d) setLines(d.lines);
+  }
+  async function create() {
+    try {
+      const s = await api<InvSession>('/api/erp/inventory-sessions', { method: 'POST', body: { category: cat || undefined } });
+      await reload();
+      openSession(s.id);
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  async function setCount(line: CountLine, value: string) {
+    setLines((ls) => ls.map((l) => (l.id === line.id ? { ...l, counted: value === '' ? null : Number(value) } : l)));
+    try {
+      await api('/api/erp/inventory-counts/' + line.id, { method: 'PATCH', body: { counted: value === '' ? null : Number(value) } });
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+  async function close() {
+    if (!openId) return;
+    if (!confirm('Clôturer la session ? Les écarts seront appliqués au stock (ajustements).')) return;
+    try {
+      const r = await api<{ adjustments: number }>('/api/erp/inventory-sessions/' + openId + '/close', { method: 'POST', body: {} });
+      onErr(`Session clôturée : ${r.adjustments} ajustement(s) appliqué(s).`);
+      setOpenId(null);
+      setLines([]);
+      reload();
+    } catch (e) {
+      onErr((e as Error).message);
+    }
+  }
+
+  const current = sessions.find((s) => s.id === openId);
+  const closed = current?.status === 'CLOSED';
+  const shown = lines.filter((l) => {
+    const t = q.trim().toLowerCase();
+    return !t || (l.code + ' ' + l.name).toLowerCase().includes(t);
+  });
+  const counted = lines.filter((l) => l.counted != null).length;
+
+  if (openId && current) {
+    return (
+      <div className="card">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <button className="text-white/50 text-sm" onClick={() => { setOpenId(null); reload(); }}>← Sessions</button>
+            <div className="font-mono text-xs text-azure mt-1">{current.reference} · {current.category ? CAT_LABEL[current.category] ?? current.category : 'Toutes'} · {counted}/{lines.length} comptées</div>
+          </div>
+          {!closed && <button className="btn" onClick={close}>Clôturer</button>}
+        </div>
+        <input className="field mb-3" placeholder="Rechercher (code, nom)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <table className="w-full text-sm">
+          <thead className="text-white/50 text-left">
+            <tr><th className="py-1">Matière</th><th className="py-1 text-right">Théo.</th><th className="py-1 text-right">Compté</th><th className="py-1 text-right">Écart</th><th className="py-1 text-right">Préc.</th></tr>
+          </thead>
+          <tbody>
+            {shown.map((l) => {
+              const ecart = l.counted == null ? null : l.counted - l.theoretical;
+              return (
+                <tr key={l.id} className="border-t border-white/10">
+                  <td className="py-1.5"><span className="font-mono text-xs">{l.code}</span><div className="text-white/50 text-[11px]">{l.name}</div></td>
+                  <td className="py-1.5 text-right text-white/60">{l.theoretical} {l.unit}</td>
+                  <td className="py-1.5 text-right">
+                    <input
+                      type="number"
+                      className="field py-1 w-20 text-right inline-block"
+                      defaultValue={l.counted ?? ''}
+                      disabled={closed}
+                      onBlur={(e) => setCount(l, e.target.value)}
+                    />
+                  </td>
+                  <td className={'py-1.5 text-right ' + (ecart == null ? 'text-white/30' : ecart === 0 ? 'text-white/40' : ecart > 0 ? 'text-green-400' : 'text-red-400')}>
+                    {ecart == null ? '—' : (ecart > 0 ? '+' : '') + ecart}
+                  </td>
+                  <td className="py-1.5 text-right text-white/40">{l.previous ?? '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Sessions d'inventaire</div>
+      <div className="flex gap-2 mb-3">
+        <select className="field" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="">Toutes les matières</option>
+          <option value="LEATHER">Peaux</option>
+          <option value="HARDWARE">Bijoux</option>
+          <option value="LINING">Doublures</option>
+        </select>
+        <button className="btn" onClick={create}>+ Nouvelle session</button>
+      </div>
+      {sessions.length === 0 && <p className="text-white/40 text-sm">Aucune session.</p>}
+      {sessions.map((s) => (
+        <button key={s.id} className="w-full flex items-center justify-between py-1.5 text-sm border-b border-white/10 text-left" onClick={() => openSession(s.id)}>
+          <div>
+            <span className="font-mono text-xs text-azure">{s.reference}</span>
+            <div className="text-white/50 text-[11px]">{s.category ? CAT_LABEL[s.category] ?? s.category : 'Toutes'} · {s._count?.counts ?? 0} matière(s) · {new Date(s.createdAt).toLocaleDateString('fr-FR')}</div>
+          </div>
+          <span className={'text-[10px] px-1.5 py-0.5 rounded ' + (s.status === 'OPEN' ? 'bg-gold/15 text-gold' : 'bg-white/10 text-white/50')}>{s.status === 'OPEN' ? 'Ouverte' : 'Clôturée'}</span>
+        </button>
       ))}
     </div>
   );

@@ -5,6 +5,7 @@ import { assembleSku, deriveYearId, deriveSeasonId } from '../services/sku';
 import { pickingList, issueMaterials, receiveFinishedPieces } from '../services/fulfillment';
 import { createPOsFromSuggestions, receivePO } from '../services/purchasing';
 import { importMaterialsCsv } from '../services/import';
+import { openInventorySession, inventorySessionDetail, closeInventorySession } from '../services/inventory';
 
 export const erpRouter = Router();
 erpRouter.use(requireAuth);
@@ -418,6 +419,38 @@ erpRouter.post('/purchase-orders/:id/receive', async (req, res) => {
   try {
     const receipt = await receivePO(req.params.id, req.user?.sub);
     res.json(receipt);
+  } catch (e) { fail(res, e); }
+});
+
+// ─── Inventaire tournant (sessions de comptage) ──────────────────────────────
+erpRouter.get('/inventory-sessions', async (_req, res) => {
+  res.json(await prisma.inventorySession.findMany({ orderBy: { createdAt: 'desc' }, take: 50, include: { _count: { select: { counts: true } } } }));
+});
+erpRouter.post('/inventory-sessions', async (req, res) => {
+  try {
+    const category = req.body?.category || undefined;
+    res.status(201).json(await openInventorySession(category, req.user?.sub));
+  } catch (e) { fail(res, e); }
+});
+erpRouter.get('/inventory-sessions/:id', async (req, res) => {
+  const d = await inventorySessionDetail(req.params.id);
+  if (!d) return res.status(404).json({ error: 'Session introuvable.' });
+  res.json(d);
+});
+erpRouter.patch('/inventory-counts/:id', async (req, res) => {
+  const { counted } = req.body ?? {};
+  try {
+    res.json(
+      await prisma.inventoryCount.update({
+        where: { id: req.params.id },
+        data: { counted: counted === '' || counted == null ? null : (counted as never) },
+      }),
+    );
+  } catch (e) { fail(res, e); }
+});
+erpRouter.post('/inventory-sessions/:id/close', async (req, res) => {
+  try {
+    res.json(await closeInventorySession(req.params.id, req.user?.sub));
   } catch (e) { fail(res, e); }
 });
 
