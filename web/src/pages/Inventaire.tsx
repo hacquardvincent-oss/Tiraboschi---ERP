@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Tabs } from '../components/ui';
 import { useToast } from '../toast';
+import { useI18n } from '../i18n';
 
 interface Supplier {
   id: string;
@@ -181,22 +182,23 @@ export function Inventaire() {
 }
 
 function DashboardTab({ onErr }: { onErr: (s: string) => void }) {
+  const { t } = useI18n();
   const [s, setS] = useState<Summary | null>(null);
   useEffect(() => {
     api<Summary>('/api/erp/summary').then(setS).catch((e) => onErr((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (!s) return <p className="text-white/40 text-sm">Chargement…</p>;
+  if (!s) return <p className="text-white/40 text-sm">{t('common.loading')}</p>;
   return (
     <>
       <div className="grid grid-cols-3 gap-3">
-        <Kpi label="Alertes matières" value={String(s.alerts.length)} alert={s.alerts.length > 0} />
-        <Kpi label="Prods en cours" value={String(s.productionCount)} />
-        <Kpi label="Pièces reçues" value={String(s.piecesTotal)} />
+        <Kpi label={t('Alertes matières')} value={String(s.alerts.length)} alert={s.alerts.length > 0} />
+        <Kpi label={t('Prods en cours')} value={String(s.productionCount)} />
+        <Kpi label={t('Pièces reçues')} value={String(s.piecesTotal)} />
       </div>
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Alertes stock</div>
-        {s.alerts.length === 0 && <p className="text-white/40 text-sm">Aucune alerte.</p>}
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Alertes stock')}</div>
+        {s.alerts.length === 0 && <p className="text-white/40 text-sm">{t('Aucune alerte.')}</p>}
         {s.alerts.map((m) => (
           <div key={m.id} className="flex justify-between py-1 text-sm border-b border-white/10">
             <span>{m.code} — {m.name}</span>
