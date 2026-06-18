@@ -422,6 +422,52 @@ export async function calculateTax(input: TaxQuoteInput): Promise<TaxQuote> {
   };
 }
 
+// ─── POS : commande brouillon (draft order) ───────────────────────────────────
+export interface DraftOrderInput {
+  email?: string;
+  customer?: { firstName?: string; lastName?: string };
+  shippingAddress?: RecoveryOrderInput['shippingAddress'];
+  lineItems: { title: string; price: string; quantity: number; sku?: string }[];
+  note?: string;
+  tags?: string[];
+}
+interface DraftOrderResult {
+  draftOrderCreate: {
+    draftOrder: { id: string; name: string; invoiceUrl: string | null } | null;
+    userErrors: { field: string[] | null; message: string }[];
+  };
+}
+/** Crée une commande brouillon Shopify (« mise de côté »), reprenable dans l'admin Shopify. */
+export async function createDraftOrder(input: DraftOrderInput): Promise<{ id: string; name: string; invoiceUrl: string | null }> {
+  const mutation = `
+    mutation DraftCreate($input: DraftOrderInput!) {
+      draftOrderCreate(input: $input) {
+        draftOrder { id name invoiceUrl }
+        userErrors { field message }
+      }
+    }`;
+  const draftInput: Record<string, unknown> = {
+    email: input.email,
+    note: input.note,
+    tags: input.tags,
+    shippingAddress: input.shippingAddress,
+    lineItems: input.lineItems.map((l) => ({
+      title: l.title,
+      originalUnitPrice: l.price,
+      quantity: l.quantity,
+      sku: l.sku,
+      requiresShipping: true,
+      taxable: true,
+    })),
+  };
+  const res = await shopifyGraphQL<DraftOrderResult>(mutation, { input: draftInput });
+  const errs = res.draftOrderCreate.userErrors;
+  if (errs.length > 0) throw new Error(errs.map((e) => e.message).join(', '));
+  const d = res.draftOrderCreate.draftOrder;
+  if (!d) throw new Error('Shopify n’a pas renvoyé le brouillon.');
+  return { id: d.id, name: d.name, invoiceUrl: d.invoiceUrl };
+}
+
 // ─── PLM : synchronisation produit Shopify ───────────────────────────────────
 
 export interface ProductSyncInput {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { createSale, markSalePaid, syncSale } from '../services/sales';
-import { calculateTax } from '../services/shopify';
+import { calculateTax, createDraftOrder } from '../services/shopify';
 import {
   createPaymentLink,
   createTerminalConnectionToken,
@@ -38,6 +38,29 @@ salesRouter.post('/tax-quote', async (req, res) => {
       },
     });
     res.json(quote);
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
+// Commande brouillon Shopify (« mise de côté »)
+salesRouter.post('/draft', async (req, res) => {
+  const b = req.body ?? {};
+  const items: { title?: string; sku?: string; priceCents?: number; qty?: number }[] = Array.isArray(b.items) ? b.items : [];
+  if (items.length === 0) return res.status(400).json({ error: 'Panier vide.' });
+  const c = b.customer ?? {};
+  try {
+    const draft = await createDraftOrder({
+      email: b.customerEmail ?? c.email ?? undefined,
+      customer: c.firstName || c.lastName ? { firstName: c.firstName, lastName: c.lastName } : undefined,
+      shippingAddress: c.address1
+        ? { firstName: c.firstName, lastName: c.lastName, address1: c.address1, address2: c.address2 || undefined, city: c.city || undefined, province: c.province || undefined, zip: c.zip || undefined, countryCode: c.country || undefined, phone: c.phone ? `${c.phoneExt ?? ''}${c.phone}` : undefined }
+        : undefined,
+      lineItems: items.map((i) => ({ title: i.title ?? 'Article', sku: i.sku || undefined, price: ((i.priceCents ?? 0) / 100).toFixed(2), quantity: i.qty ?? 1 })),
+      note: `Brouillon POS${b.market ? ' ' + b.market : ''}`,
+      tags: ['POS', 'brouillon'],
+    });
+    res.json(draft);
   } catch (e) {
     res.status(502).json({ error: (e as Error).message });
   }

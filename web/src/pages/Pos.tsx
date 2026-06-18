@@ -336,6 +336,29 @@ export function Pos() {
     }
   }
 
+  async function onDraft() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    setBusy('draft');
+    try {
+      const r = await api<{ name: string; invoiceUrl: string | null }>('/api/pos/sales/draft', {
+        method: 'POST',
+        body: {
+          market: currency === 'EUR' ? 'FR' : 'US',
+          currency,
+          customer,
+          customerEmail: customer.email || undefined,
+          items: cart.map((l) => ({ title: l.name, sku: l.sku || undefined, priceCents: Math.round(l.unitHt * 100), qty: l.qty })),
+        },
+      });
+      toast(`Brouillon ${r.name} enregistré dans Shopify.`, 'success');
+      if (r.invoiceUrl) setPayLink(r.invoiceUrl);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
   async function onTpe() {
     if (cart.length === 0) return setErr('Panier vide.');
     const v = validate();
@@ -577,6 +600,12 @@ export function Pos() {
             </div>
           )}
         </div>
+      )}
+
+      {cart.length > 0 && (
+        <button className="text-azure text-sm" onClick={onDraft} disabled={busy !== ''}>
+          {busy === 'draft' ? '…' : '⏸ ' + t('Mettre de côté (brouillon Shopify)')}
+        </button>
       )}
 
       {/* Barre d'encaissement collante */}

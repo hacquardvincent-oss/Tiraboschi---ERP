@@ -94,6 +94,7 @@ const EN: Record<string, string> = {
   'Lien': 'Link',
   'Enreg.': 'Save',
   'Lien de paiement': 'Payment link',
+  'Mettre de côté (brouillon Shopify)': 'Set aside (Shopify draft)',
   'taxes comprises': 'taxes incl.',
   'Copier': 'Copy',
   '+ Nouvelle vente': '+ New sale',
