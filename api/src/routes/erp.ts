@@ -137,6 +137,14 @@ erpRouter.post('/materials/import', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// Vérifie si un ID matière existe déjà (générateur d'ID — anti-doublon)
+erpRouter.get('/material-exists', async (req, res) => {
+  const code = req.query.code ? String(req.query.code).toUpperCase() : '';
+  if (!code) return res.json({ exists: false });
+  const m = await prisma.material.findUnique({ where: { code } });
+  res.json({ exists: !!m, name: m?.name ?? null });
+});
+
 // Niveau de stock courant d'une matière (somme du ledger)
 erpRouter.get('/materials/:id/stock', async (req, res) => {
   try {

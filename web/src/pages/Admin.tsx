@@ -33,21 +33,82 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function Admin() {
-  const [adminTab, setAdminTab] = useState<'bdd' | 'users'>('bdd');
+  const [adminTab, setAdminTab] = useState<'bdd' | 'users' | 'coherence'>('bdd');
   return (
     <div>
       <div className="mb-3">
-        <Tabs active={adminTab} onChange={setAdminTab} tabs={[['bdd', 'Base de données'], ['users', 'Utilisateurs']] as ['bdd' | 'users', string][]} />
+        <Tabs active={adminTab} onChange={setAdminTab} tabs={[['bdd', 'Base de données'], ['users', 'Utilisateurs'], ['coherence', 'Cohérence']] as ['bdd' | 'users' | 'coherence', string][]} />
       </div>
-      {adminTab === 'bdd' ? (
+      {adminTab === 'bdd' && (
         <>
           <GlobalSettings />
           <RefAdmin />
         </>
-      ) : (
-        <UsersAdmin />
       )}
+      {adminTab === 'users' && <UsersAdmin />}
+      {adminTab === 'coherence' && <BddAssistant />}
     </div>
+  );
+}
+
+function BddAssistant() {
+  const { t } = useI18n();
+  const [seg, setSeg] = useState({ cat: '', ani: '', typ: '', col: '' });
+  const [exists, setExists] = useState<boolean | null>(null);
+  const [conflicts, setConflicts] = useState<{ labelConflicts: { label: string; codes: string[] }[]; codeConflicts: { code: string; labels: string[] }[] } | null>(null);
+  const code = [seg.cat, seg.ani, seg.typ, seg.col].map((s) => s.trim().toUpperCase()).filter(Boolean).join('-');
+
+  useEffect(() => {
+    api<typeof conflicts>('/api/ref/color-conflicts').then(setConflicts).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (code.split('-').length < 4) { setExists(null); return; }
+    const id = setTimeout(() => {
+      api<{ exists: boolean }>('/api/erp/material-exists?code=' + encodeURIComponent(code)).then((r) => setExists(r.exists)).catch(() => setExists(null));
+    }, 300);
+    return () => clearTimeout(id);
+  }, [code]);
+
+  return (
+    <>
+      <div className="card mb-4">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t("Générateur d'ID matière")}</div>
+        <div className="text-[11px] text-white/40 mb-2">{t('Format : Catégorie-Animal-Type-Couleur (ex. PEA-VEA-DEL-001)')}</div>
+        <div className="grid grid-cols-4 gap-2">
+          <input className="field" placeholder="CAT" value={seg.cat} onChange={(e) => setSeg({ ...seg, cat: e.target.value })} />
+          <input className="field" placeholder="ANI" value={seg.ani} onChange={(e) => setSeg({ ...seg, ani: e.target.value })} />
+          <input className="field" placeholder="TYP" value={seg.typ} onChange={(e) => setSeg({ ...seg, typ: e.target.value })} />
+          <input className="field" placeholder="COL" value={seg.col} onChange={(e) => setSeg({ ...seg, col: e.target.value })} />
+        </div>
+        {code && (
+          <div className="mt-3 flex items-center gap-3">
+            <span className="font-mono text-lg text-azure">{code}</span>
+            {exists === true && <span className="text-red-400 text-xs">⚠ {t('déjà utilisé')}</span>}
+            {exists === false && <span className="text-green-400 text-xs">✓ {t('disponible')}</span>}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Conflits de coloris')}</div>
+        {!conflicts && <p className="text-white/40 text-sm">{t('common.loading')}</p>}
+        {conflicts && conflicts.labelConflicts.length === 0 && conflicts.codeConflicts.length === 0 && (
+          <p className="text-green-400/80 text-sm">{t('Aucun conflit ✓')}</p>
+        )}
+        {conflicts?.labelConflicts.map((c) => (
+          <div key={c.label} className="flex justify-between py-1 text-sm border-b border-white/10">
+            <span>« {c.label} »</span>
+            <span className="text-amber-400 font-mono text-xs">{c.codes.join(', ')}</span>
+          </div>
+        ))}
+        {conflicts?.codeConflicts.map((c) => (
+          <div key={c.code} className="flex justify-between py-1 text-sm border-b border-white/10">
+            <span className="font-mono text-xs">{c.code}</span>
+            <span className="text-amber-400">{c.labels.join(', ')}</span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 

@@ -6,6 +6,26 @@ import { importRefCsv, importRefMultiCsv } from '../services/import';
 export const refRouter = Router();
 refRouter.use(requireAuth);
 
+// Détection de conflits de coloris : un même libellé porté par plusieurs codes (ou l'inverse)
+refRouter.get('/color-conflicts', async (_req, res) => {
+  const colors = await prisma.refItem.findMany({ where: { category: 'colors' } });
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  const byLabel = new Map<string, { label: string; codes: string[] }>();
+  const byCode = new Map<string, string[]>();
+  for (const c of colors) {
+    const key = norm(c.label);
+    const g = byLabel.get(key) ?? { label: c.label, codes: [] };
+    g.codes.push(c.code);
+    byLabel.set(key, g);
+    byCode.set(c.code, [...(byCode.get(c.code) ?? []), c.label]);
+  }
+  res.json({
+    labelConflicts: [...byLabel.values()].filter((g) => g.codes.length > 1),
+    codeConflicts: [...byCode.entries()].filter(([, labels]) => labels.length > 1).map(([code, labels]) => ({ code, labels })),
+    total: colors.length,
+  });
+});
+
 // Import CSV d'une catégorie de référentiel (Admin)
 refRouter.post('/import', requireRole('ADMIN'), async (req, res) => {
   const { category, csv } = req.body ?? {};
