@@ -502,14 +502,17 @@ export function Collection() {
                         <div className="text-[11px] text-white/30 mt-1">Option {opt}</div>
                         {decls.map((p) => (
                           <div key={p.id} className="flex items-center justify-between py-1 text-sm border-b border-white/5">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
                               <Thumb src={p.imageUrl} alt={p.name} size={48} />
-                              <span className="font-mono text-azure text-xs">{p.sku}</span>
+                              <div className="min-w-0">
+                                <div className="truncate">{p.name}</div>
+                                <div className="font-mono text-white/30 text-[11px]">{p.sku}</div>
+                              </div>
                               <StatusBadge status={p.status} />
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 shrink-0">
                               <span className="text-white/60">{p.priceHtUsd ? '$' + p.priceHtUsd : '—'}</span>
-                              <button className="text-azure text-xs" onClick={() => edit(p.id)}>Modifier</button>
+                              <button className="text-azure text-xs" onClick={() => edit(p.id)}>{t('Modifier')}</button>
                             </div>
                           </div>
                         ))}
@@ -804,8 +807,8 @@ function ProductTile({ p, onClick }: { p: Product; onClick: () => void }) {
         )}
       </div>
       <div className="p-2">
-        <div className="font-mono text-azure text-[11px] truncate">{p.sku}</div>
-        <div className="text-xs truncate">{p.name}</div>
+        <div className="text-sm truncate font-medium">{p.name}</div>
+        <div className="font-mono text-white/30 text-[10px] truncate">{p.sku}</div>
         <div className="flex items-center justify-between mt-1">
           <StatusBadge status={p.status} />
           <span className="text-white/60 text-xs">{p.priceHtUsd ? '$' + p.priceHtUsd : '—'}</span>

@@ -65,9 +65,11 @@ export function Pos() {
     note: '',
   };
   const [customer, setCustomer] = useState(emptyCustomer);
+  const [addressValidated, setAddressValidated] = useState(false);
   const setC = (patch: Partial<typeof emptyCustomer>) => {
     setCustomer((c) => ({ ...c, ...patch }));
     setTaxQuote(null); // l'adresse change → la taxe calculée n'est plus valable
+    setAddressValidated(false);
   };
   const [usTaxRate] = useState('8'); // estimation d'attente (taxe exacte calculée par Shopify à la validation)
   const [ddp, setDdp] = useState(false);
@@ -141,12 +143,11 @@ export function Pos() {
     setTaxQuote(null);
   };
 
-  async function computeTax() {
-    if (cart.length === 0) return setErr('Panier vide.');
-    if (!customer.zip.trim()) { setErr('Saisis le code postal pour calculer la taxe.'); return focusZip(); }
-    if (!customer.country) return setErr('Pays du client requis pour le calcul des taxes.');
+  async function computeTax(): Promise<boolean> {
+    if (cart.length === 0) { setErr('Ajoute au moins un article avant de valider.'); return false; }
+    if (!customer.zip.trim()) { setErr('Saisis le code postal pour calculer la taxe.'); focusZip(); return false; }
+    if (!customer.country) { setErr('Pays du client requis pour le calcul des taxes.'); return false; }
     setTaxBusy(true);
-    setErr('');
     try {
       const q = await api<{ totalTaxCents: number; currency: string; lines: { title: string; rate: number; amountCents: number }[] }>(
         '/api/pos/sales/tax-quote',
@@ -166,10 +167,11 @@ export function Pos() {
         },
       );
       setTaxQuote(q);
-      if (q.lines.length === 0) setErr('Shopify n’a renvoyé aucune taxe pour cette adresse (vérifier la config taxe Shopify).');
-    } catch (e) {
-      setErr((e as Error).message);
+      return true;
+    } catch {
+      // Shopify indisponible → on n'empêche pas la vente : estimation utilisée, taxe exacte au paiement.
       setTaxQuote(null);
+      return false;
     } finally {
       setTaxBusy(false);
     }
@@ -222,11 +224,6 @@ export function Pos() {
   const fmt = (n: number) => n.toFixed(2) + ' ' + sym;
   const fmtDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
-  const availLabel = (a: CartAvailLine) => {
-    if (a.path === 'stock') return `En stock (${a.inStock}) · livrable ~${fmtDate(a.readyDate)}`;
-    if (a.path === 'production') return `Sur commande · livrable ~${fmtDate(a.readyDate)}`;
-    return `⚠ ${a.note ?? 'indisponible'}`;
-  };
 
   /** Enregistre le client dans Shopify : crée si nouveau, met à jour si existant (avec confirmation, pas d'écrasement silencieux). */
   async function saveCustomer() {
@@ -252,9 +249,23 @@ export function Pos() {
     }
   }
 
-  /** « Valider l'adresse » : déclenche le calcul de taxe Shopify (US) ; TVA fixe en FR. */
+  /** « Valider l'adresse » : calcule la taxe Shopify (US) ; TVA fixe en FR. Ne bloque jamais la vente. */
   async function validateAddress() {
-    if (currency === 'USD') return computeTax();
+    if (cart.length === 0) return setErr('Ajoute au moins un article avant de valider.');
+    if (currency === 'USD') {
+      const ok = await computeTax();
+      if (!ok && customer.zip.trim()) {
+        setAddressValidated(true); // adresse OK : à défaut de quote Shopify, on garde l'estimation
+        toast('Adresse validée. Taxe estimée — le montant exact est confirmé au paiement.', 'info');
+        return;
+      }
+      if (ok) {
+        setAddressValidated(true);
+        toast('Adresse validée — taxe calculée.', 'success');
+      }
+      return;
+    }
+    setAddressValidated(true);
     toast('Adresse validée — TVA 20% appliquée.', 'success');
   }
 
@@ -395,18 +406,32 @@ export function Pos() {
     setErr('');
   }
 
-  const shareMsg = () => `Votre lien de paiement Tiraboschi : ${payLink}`;
+  // Messages d'envoi du lien — soignés, bilingues (langue de l'app), avec le prénom du client.
+  const hello = () => {
+    const name = customer.firstName.trim();
+    if (lang === 'fr') return name ? `Cher·e ${name},` : 'Bonjour,';
+    return name ? `Dear ${name},` : 'Hello,';
+  };
+  const emailSubject = () => (lang === 'fr' ? 'Votre commande Tiraboschi — lien de paiement sécurisé' : 'Your Tiraboschi order — secure payment link');
+  const shareBody = () =>
+    lang === 'fr'
+      ? `${hello()}\n\nNous vous remercions pour votre confiance. Voici votre lien de paiement sécurisé pour finaliser votre commande :\n${payLink}\n\nNotre équipe reste à votre entière disposition.\nAvec toute notre considération,\nL'équipe Tiraboschi`
+      : `${hello()}\n\nThank you for your trust. Here is your secure payment link to complete your order:\n${payLink}\n\nOur team remains at your full disposal.\nWith our warmest regards,\nThe Tiraboschi team`;
+  const shareShort = () =>
+    lang === 'fr'
+      ? `${hello()} votre lien de paiement sécurisé Tiraboschi : ${payLink}`
+      : `${hello()} your secure Tiraboschi payment link: ${payLink}`;
   const phoneDigits = () => `${customer.phoneExt}${customer.phone}`.replace(/\D/g, '');
   function shareWhatsapp() {
     if (!payLink) return;
     const to = customer.phone ? phoneDigits() : '';
-    window.open(`https://wa.me/${to}?text=${encodeURIComponent(shareMsg())}`, '_blank');
+    window.open(`https://wa.me/${to}?text=${encodeURIComponent(shareShort())}`, '_blank');
   }
   function shareEmail() {
-    window.open(`mailto:${customer.email}?subject=${encodeURIComponent('Votre commande Tiraboschi')}&body=${encodeURIComponent(shareMsg())}`);
+    window.open(`mailto:${customer.email}?subject=${encodeURIComponent(emailSubject())}&body=${encodeURIComponent(shareBody())}`);
   }
   function shareSms() {
-    window.open(`sms:${customer.phone ? phoneDigits() : ''}?&body=${encodeURIComponent(shareMsg())}`);
+    window.open(`sms:${customer.phone ? phoneDigits() : ''}?&body=${encodeURIComponent(shareShort())}`);
   }
 
   return (
@@ -471,8 +496,8 @@ export function Pos() {
         </div>
         {clientOpen && (
           <div className="mt-3 space-y-2">
-            <button className="btn w-full" disabled={taxBusy} onClick={validateAddress}>
-              {taxBusy ? t('Calcul…') : t("Valider l'adresse (calcul des taxes)")}
+            <button className={'btn w-full ' + (addressValidated ? 'opacity-90' : '')} disabled={taxBusy} onClick={validateAddress}>
+              {taxBusy ? t('Calcul…') : addressValidated ? '✓ ' + t('Adresse validée') : t("Valider l'adresse (calcul des taxes)")}
             </button>
             <button className="text-azure text-sm" disabled={busy === 'cust'} onClick={saveCustomer}>
               {busy === 'cust' ? '…' : t('Enregistrer le client')}
@@ -523,14 +548,8 @@ export function Pos() {
           <div key={l.uid} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm gap-2">
             <Thumb src={l.imageUrl} alt={l.name} size={36} />
             <div className="flex-1 min-w-0">
-              <div className="font-mono text-azure text-xs">{l.sku || t('HORS CATALOGUE')}</div>
               <div className="truncate">{l.name}</div>
-              {(() => {
-                const a = l.sku ? cartAvail?.lines.find((x) => x.sku === l.sku) : null;
-                return a ? (
-                  <div className={'text-[11px] ' + (a.path === 'blocked' ? 'text-red-400' : 'text-white/40')}>{availLabel(a)}</div>
-                ) : null;
-              })()}
+              <div className="font-mono text-white/30 text-[11px]">{l.sku || t('HORS CATALOGUE')}</div>
             </div>
             <div className="flex items-center gap-2">
               <span>×{l.qty}</span>
@@ -547,7 +566,8 @@ export function Pos() {
           <button className={'px-3 py-1.5 rounded border ' + (ddp ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setDdp(true)}>{t('À distance')}</button>
           {ddp && (
             <span className="flex items-center gap-1 text-xs text-white/60">
-              {t('Frais de port')} <input className="field w-20 py-1" value={shipping} onChange={(e) => setShipping(e.target.value)} />
+              {t('Frais de port')} : <b className="text-white/80">{fmt(ship)}</b>
+              <span className="text-white/30">({t('défini en Admin')})</span>
             </span>
           )}
         </div>
@@ -564,18 +584,19 @@ export function Pos() {
             <span>{t('Total')} {currency === 'EUR' ? 'TTC' : t('taxes comprises')}</span>
             <span>{fmt(total)}</span>
           </div>
-          {cartAvail && cart.length > 0 && (
+          {cartAvail?.readyDate && cart.length > 0 && (
             <div className="flex justify-between text-xs pt-1">
               <span className="text-white/50">{t('Livraison estimée au client')}</span>
-              <span className={cartAvail.readyDate ? 'text-white/80' : 'text-red-400'}>
-                {cartAvail.readyDate ? '~' + fmtDate(cartAvail.readyDate) : t('à confirmer (voir lignes)')}
-              </span>
+              <span className="text-white/80">~{fmtDate(cartAvail.readyDate)}</span>
             </div>
           )}
-          {currency === 'USD' && !taxQuote && (
-            <p className="text-amber-400 text-[11px]">⚠ {t('Saisissez le code postal et validez l’adresse pour calculer les Sales Tax.')}</p>
+          {currency === 'USD' && !addressValidated && (
+            <p className="text-amber-400 text-[11px]">⚠ {t('Validez l’adresse pour calculer la Sales Tax.')}</p>
           )}
-          {taxQuote && <p className="text-green-400/70 text-[11px]">Taxe réelle calculée par Shopify pour l'adresse saisie.</p>}
+          {currency === 'USD' && addressValidated && !taxQuote && (
+            <p className="text-white/50 text-[11px]">{t('Taxe estimée — montant exact confirmé par Shopify au paiement.')}</p>
+          )}
+          {taxQuote && <p className="text-green-400/70 text-[11px]">{t('Taxe calculée par Shopify pour cette adresse.')}</p>}
         </div>
       </div>
 
