@@ -203,6 +203,7 @@ function DashboardTab({ onErr }: { onErr: (s: string) => void }) {
 }
 
 function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
+  const { t } = useI18n();
   const [s, setS] = useState<Summary | null>(null);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [q, setQ] = useState('');
@@ -264,9 +265,9 @@ function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
     <>
       <div className="card">
         <div className="flex gap-2 mb-3">
-          <button className="btn flex-1" onClick={() => setMode(mode === 'in' ? '' : 'in')}>+ Réception</button>
-          <button className="btn flex-1" onClick={() => setMode(mode === 'out' ? '' : 'out')}>Sortie exceptionnelle</button>
-          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>Importer CSV</button>
+          <button className="btn flex-1" onClick={() => setMode(mode === 'in' ? '' : 'in')}>{t('+ Réception')}</button>
+          <button className="btn flex-1" onClick={() => setMode(mode === 'out' ? '' : 'out')}>{t('Sortie exceptionnelle')}</button>
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>{t('Importer CSV')}</button>
         </div>
         {showImport && (
           <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
@@ -274,7 +275,7 @@ function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
             <input type="file" accept=".csv,text/csv" className="text-xs" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(setImpCsv); }} />
             <textarea className="field font-mono text-[11px]" rows={3} placeholder="…ou colle le CSV ici" value={impCsv} onChange={(e) => setImpCsv(e.target.value)} />
             <div className="flex items-center gap-3">
-              <button className="btn" onClick={runImport}>Importer</button>
+              <button className="btn" onClick={runImport}>{t('Importer')}</button>
               {impMsg && <span className="text-xs text-white/70">{impMsg}</span>}
             </div>
           </div>
@@ -282,22 +283,22 @@ function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
         {mode && (
           <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
             <div className="text-xs uppercase tracking-editorial text-white/50">
-              {mode === 'in' ? 'Réception de matière' : 'Sortie exceptionnelle'}
+              {mode === 'in' ? t('Réception de matière') : t('Sortie exceptionnelle')}
             </div>
             <select className="field" value={mv.materialId} onChange={(e) => setMv({ ...mv, materialId: e.target.value })}>
-              <option value="">— Matière —</option>
+              <option value="">{t('— Matière —')}</option>
               {(s?.materials ?? []).map((m) => (
                 <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
               ))}
             </select>
             <div className="flex gap-2">
-              <input className="field w-32" type="number" placeholder="Quantité" value={mv.quantity} onChange={(e) => setMv({ ...mv, quantity: e.target.value })} />
-              <input className="field flex-1" placeholder="Note (motif)" value={mv.note} onChange={(e) => setMv({ ...mv, note: e.target.value })} />
+              <input className="field w-32" type="number" placeholder={t('Quantité')} value={mv.quantity} onChange={(e) => setMv({ ...mv, quantity: e.target.value })} />
+              <input className="field flex-1" placeholder={t('Note (motif)')} value={mv.note} onChange={(e) => setMv({ ...mv, note: e.target.value })} />
             </div>
-            <button className="btn w-full" onClick={submit}>Valider</button>
+            <button className="btn w-full" onClick={submit}>{t('Valider')}</button>
           </div>
         )}
-        <input className="field mb-3" placeholder="Rechercher (code, nom, catégorie)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="field mb-3" placeholder={t('Rechercher (code, nom, catégorie)…')} value={q} onChange={(e) => setQ(e.target.value)} />
         <table className="w-full text-sm">
           <thead className="text-white/50 text-left">
             <tr><th className="py-1">Code</th><th className="py-1">Nom</th><th className="py-1">Stock</th><th className="py-1">Fournisseur</th></tr>
@@ -311,14 +312,14 @@ function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
                 <td className="py-1.5">{m.supplier?.name ?? '—'}</td>
               </tr>
             ))}
-            {materials.length === 0 && <tr><td colSpan={4} className="py-3 text-white/40">Aucune matière.</td></tr>}
+            {materials.length === 0 && <tr><td colSpan={4} className="py-3 text-white/40">{t('Aucune matière.')}</td></tr>}
           </tbody>
         </table>
       </div>
 
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Mouvements récents</div>
-        {movements.length === 0 && <p className="text-white/40 text-sm">Aucun mouvement.</p>}
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Mouvements récents')}</div>
+        {movements.length === 0 && <p className="text-white/40 text-sm">{t('Aucun mouvement.')}</p>}
         {movements.slice(0, 30).map((m) => (
           <div key={m.id} className="flex justify-between py-1 text-sm border-b border-white/10">
             <span>{m.material?.code ?? '—'} <span className="text-white/40 text-xs">{m.type}</span></span>
@@ -331,6 +332,7 @@ function MaterialsTab({ onErr }: { onErr: (s: string) => void }) {
 }
 
 function ProductionTab({ onErr }: { onErr: (s: string) => void }) {
+  const { t } = useI18n();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [adding, setAdding] = useState(false);
@@ -418,24 +420,24 @@ function ProductionTab({ onErr }: { onErr: (s: string) => void }) {
     <>
       <div className="card">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-xs uppercase tracking-editorial text-white/50">Ordres de production</div>
-          <button className="btn" onClick={() => setAdding(!adding)}>+ Ordre</button>
+          <div className="text-xs uppercase tracking-editorial text-white/50">{t('Ordres de production')}</div>
+          <button className="btn" onClick={() => setAdding(!adding)}>{t('+ Ordre')}</button>
         </div>
         {adding && (
           <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
             <select className="field" value={f.workshopId} onChange={(e) => setF({ ...f, workshopId: e.target.value })}>
-              <option value="">— Atelier —</option>
+              <option value="">— {t('Atelier')} —</option>
               {workshops.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
-            <input className="field" placeholder="SKU variante" value={f.variantSku} onChange={(e) => setF({ ...f, variantSku: e.target.value })} />
+            <input className="field" placeholder={t('SKU variante')} value={f.variantSku} onChange={(e) => setF({ ...f, variantSku: e.target.value })} />
             <div className="flex gap-2">
-              <input className="field w-24" type="number" placeholder="Qté" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
-              <input className="field flex-1" placeholder="Réf. commande client (option)" value={f.clientOrderRef} onChange={(e) => setF({ ...f, clientOrderRef: e.target.value })} />
+              <input className="field w-24" type="number" placeholder={t('Quantité')} value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
+              <input className="field flex-1" placeholder={t('Réf. commande client (option)')} value={f.clientOrderRef} onChange={(e) => setF({ ...f, clientOrderRef: e.target.value })} />
             </div>
-            <button className="btn w-full" onClick={create}>Créer l'ordre</button>
+            <button className="btn w-full" onClick={create}>{t("Créer l'ordre")}</button>
           </div>
         )}
-        {orders.length === 0 && <p className="text-white/40 text-sm">Aucun ordre de production.</p>}
+        {orders.length === 0 && <p className="text-white/40 text-sm">{t('Aucun ordre de production.')}</p>}
         {orders.map((o) => (
           <div key={o.id} className="py-1.5 border-b border-white/10">
             <div className="flex items-center justify-between text-sm">
@@ -490,6 +492,7 @@ function ProductionTab({ onErr }: { onErr: (s: string) => void }) {
 }
 
 function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
+  const { t } = useI18n();
   const [plan, setPlan] = useState<PlanGroup[]>([]);
   const [reorder, setReorder] = useState<ReorderSuggestion[]>([]);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
@@ -546,7 +549,7 @@ function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
   return (
     <>
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Regroupement par atelier (MOQ)</div>
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Regroupement par atelier (MOQ)')}</div>
         {plan.length === 0 && <p className="text-white/40 text-sm">Aucun ordre en attente de lancement.</p>}
         {plan.map((g) => (
           <div key={g.workshopId} className="border-b border-white/10 py-2">
@@ -578,7 +581,7 @@ function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
       </div>
 
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Suggestions de réapprovisionnement</div>
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Suggestions de réapprovisionnement')}</div>
         {reorder.length === 0 && <p className="text-white/40 text-sm">Aucune matière sous le seuil.</p>}
         {reorder.map((r) => (
           <div key={r.id} className="flex items-center justify-between py-1.5 text-sm border-b border-white/10">
@@ -590,13 +593,13 @@ function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
           </div>
         ))}
         {reorder.length > 0 && (
-          <button className="btn w-full mt-3" onClick={genPOs}>Générer les bons de commande</button>
+          <button className="btn w-full mt-3" onClick={genPOs}>{t('Générer les bons de commande')}</button>
         )}
       </div>
 
       <div className="card">
-        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Bons de commande fournisseur</div>
-        {pos.length === 0 && <p className="text-white/40 text-sm">Aucun bon de commande.</p>}
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Bons de commande fournisseur')}</div>
+        {pos.length === 0 && <p className="text-white/40 text-sm">{t('Aucun bon de commande.')}</p>}
         {pos.map((po) => (
           <div key={po.id} className="border-b border-white/10 py-2">
             <div className="flex items-center justify-between text-sm">
@@ -606,8 +609,8 @@ function PlanningTab({ onErr }: { onErr: (s: string) => void }) {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/10 text-white/60">{PO_STATUS_FR[po.status]}</span>
-                {po.status === 'DRAFT' && <button className="text-azure text-xs" onClick={() => setPoStatus(po.id, 'SENT')}>Envoyer</button>}
-                {(po.status === 'DRAFT' || po.status === 'SENT') && <button className="text-green-300 text-xs" onClick={() => receivePo(po.id)}>Réceptionner</button>}
+                {po.status === 'DRAFT' && <button className="text-azure text-xs" onClick={() => setPoStatus(po.id, 'SENT')}>{t('Envoyer')}</button>}
+                {(po.status === 'DRAFT' || po.status === 'SENT') && <button className="text-green-300 text-xs" onClick={() => receivePo(po.id)}>{t('Réceptionner')}</button>}
               </div>
             </div>
             <div className="ml-1 mt-1">
@@ -637,6 +640,7 @@ interface SerialItem {
 }
 
 function PiecesTab({ onErr }: { onErr: (s: string) => void }) {
+  const { t } = useI18n();
   const [stock, setStock] = useState<FinStock[]>([]);
   const [openSku, setOpenSku] = useState<string | null>(null);
   const [serials, setSerials] = useState<SerialItem[]>([]);
@@ -669,8 +673,8 @@ function PiecesTab({ onErr }: { onErr: (s: string) => void }) {
 
   return (
     <div className="card">
-      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Stock pièces (entrepôt)</div>
-      {stock.length === 0 && <p className="text-white/40 text-sm">Aucune pièce en stock.</p>}
+      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Stock pièces (entrepôt)')}</div>
+      {stock.length === 0 && <p className="text-white/40 text-sm">{t('Aucune pièce en stock.')}</p>}
       {stock.map((g) => (
         <div key={g.sku} className="border-b border-white/10">
           <button className="w-full flex items-center gap-3 py-2 text-sm text-left" onClick={() => toggle(g.sku)}>
@@ -679,7 +683,7 @@ function PiecesTab({ onErr }: { onErr: (s: string) => void }) {
               <div className="truncate">{g.name}</div>
               <div className="font-mono text-azure text-[11px]">{g.sku}</div>
             </div>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/15 text-gold">{g.count} pièce(s)</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/15 text-gold">{g.count} {t('pièce(s)')}</span>
             <span className="text-white/40 text-xs">{openSku === g.sku ? '▾' : '▸'}</span>
           </button>
           {openSku === g.sku && (
@@ -689,12 +693,12 @@ function PiecesTab({ onErr }: { onErr: (s: string) => void }) {
                   <img src={qr(s.serial)} alt="QR" width={56} height={56} className="rounded bg-white p-0.5 shrink-0" loading="lazy" />
                   <div className="flex-1 min-w-0">
                     <div className="font-mono text-white/80 break-all">{s.serial}</div>
-                    <a className="text-azure" href={passportUrl(s.serial)} target="_blank" rel="noreferrer">Passeport ↗</a>
+                    <a className="text-azure" href={passportUrl(s.serial)} target="_blank" rel="noreferrer">{t('Passeport')} ↗</a>
                   </div>
-                  <button className="text-red-400/70" onClick={() => exceptionalOut(s.id)}>Sortie</button>
+                  <button className="text-red-400/70" onClick={() => exceptionalOut(s.id)}>{t('Sortie')}</button>
                 </div>
               ))}
-              {serials.length === 0 && <p className="text-white/40 text-xs">Aucun n° de série disponible.</p>}
+              {serials.length === 0 && <p className="text-white/40 text-xs">{t('Aucun n° de série disponible.')}</p>}
             </div>
           )}
         </div>
@@ -706,6 +710,7 @@ function PiecesTab({ onErr }: { onErr: (s: string) => void }) {
 const EMPTY_WS = { name: '', location: '', leadTimeDays: '', capacityPerMonth: '', moq: '', transitDays: '', shippingCost: '' };
 
 function WorkshopsTab({ onErr }: { onErr: (s: string) => void }) {
+  const { t } = useI18n();
   const [list, setList] = useState<WorkshopFull[]>([]);
   const [models, setModels] = useState<RefModel[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -769,23 +774,23 @@ function WorkshopsTab({ onErr }: { onErr: (s: string) => void }) {
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-xs uppercase tracking-editorial text-white/50">Ateliers (capacité · délai · MOQ · compétences)</div>
-        <button className="btn" onClick={openNew}>+ Atelier</button>
+        <div className="text-xs uppercase tracking-editorial text-white/50">{t('Ateliers')}</div>
+        <button className="btn" onClick={openNew}>{t('+ Atelier')}</button>
       </div>
 
       {adding && (
         <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <input className="field" placeholder="Nom" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-            <input className="field" placeholder="Localisation" value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} />
-            <input className="field" type="number" placeholder="Délai fabrication (j)" value={f.leadTimeDays} onChange={(e) => setF({ ...f, leadTimeDays: e.target.value })} />
-            <input className="field" type="number" placeholder="Capacité (pièces/mois)" value={f.capacityPerMonth} onChange={(e) => setF({ ...f, capacityPerMonth: e.target.value })} />
-            <input className="field" type="number" placeholder="MOQ (min par lancement)" value={f.moq} onChange={(e) => setF({ ...f, moq: e.target.value })} />
-            <input className="field" type="number" placeholder="Transit entrepôt↔atelier (j)" value={f.transitDays} onChange={(e) => setF({ ...f, transitDays: e.target.value })} />
-            <input className="field" type="number" step="0.01" placeholder="Frais de port" value={f.shippingCost} onChange={(e) => setF({ ...f, shippingCost: e.target.value })} />
+            <input className="field" placeholder={t("Nom de l'atelier")} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+            <input className="field" placeholder={t('Localisation')} value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} />
+            <input className="field" type="number" placeholder={t('Délai fabrication (j)')} value={f.leadTimeDays} onChange={(e) => setF({ ...f, leadTimeDays: e.target.value })} />
+            <input className="field" type="number" placeholder={t('Capacité (pièces/mois)')} value={f.capacityPerMonth} onChange={(e) => setF({ ...f, capacityPerMonth: e.target.value })} />
+            <input className="field" type="number" placeholder={t('MOQ (min par lancement)')} value={f.moq} onChange={(e) => setF({ ...f, moq: e.target.value })} />
+            <input className="field" type="number" placeholder={t('Transit entrepôt↔atelier (j)')} value={f.transitDays} onChange={(e) => setF({ ...f, transitDays: e.target.value })} />
+            <input className="field" type="number" step="0.01" placeholder={t('Frais de port')} value={f.shippingCost} onChange={(e) => setF({ ...f, shippingCost: e.target.value })} />
           </div>
           <div>
-            <div className="text-[11px] text-white/40 mb-1">Modèles que cet atelier sait produire</div>
+            <div className="text-[11px] text-white/40 mb-1">{t('Modèles que cet atelier sait produire')}</div>
             <div className="flex flex-wrap gap-2">
               {models.map((m) => (
                 <label key={m.code} className={'text-xs px-2 py-1 rounded border cursor-pointer ' + (caps.has(m.code) ? 'border-azure text-azure' : 'border-white/20 text-white/50')}>
@@ -797,13 +802,13 @@ function WorkshopsTab({ onErr }: { onErr: (s: string) => void }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <button className="btn flex-1" onClick={save}>{editingId ? 'Enregistrer' : 'Créer'}</button>
-            <button className="text-white/50 text-sm px-3" onClick={() => setAdding(false)}>Annuler</button>
+            <button className="btn flex-1" onClick={save}>{editingId ? t('Enregistrer') : t('Créer')}</button>
+            <button className="text-white/50 text-sm px-3" onClick={() => setAdding(false)}>{t('Annuler')}</button>
           </div>
         </div>
       )}
 
-      {list.length === 0 && <p className="text-white/40 text-sm">Aucun atelier.</p>}
+      {list.length === 0 && <p className="text-white/40 text-sm">{t('Aucun atelier.')}</p>}
       {list.map((w) => (
         <div key={w.id} className="flex items-center justify-between py-1.5 text-sm border-b border-white/10">
           <div>
@@ -812,7 +817,7 @@ function WorkshopsTab({ onErr }: { onErr: (s: string) => void }) {
               {w.leadTimeDays != null ? `${w.leadTimeDays} j` : 'délai —'} · MOQ {w.moq ?? '—'} · {w.capabilities.length} modèle(s)
             </div>
           </div>
-          <button className="text-azure text-xs" onClick={() => openEdit(w)}>Modifier</button>
+          <button className="text-azure text-xs" onClick={() => openEdit(w)}>{t('Modifier')}</button>
         </div>
       ))}
     </div>

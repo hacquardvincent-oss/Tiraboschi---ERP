@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { RefSelect } from '../components/RefSelect';
 import { Tabs, Thumb } from '../components/ui';
 import { useToast } from '../toast';
+import { useI18n } from '../i18n';
 
 interface Product {
   id: string;
@@ -108,6 +109,7 @@ function liveSku(f: Form): string {
 
 export function Collection() {
   const toast = useToast();
+  const { t } = useI18n();
   const [view, setView] = useState<'list' | 'form'>('list');
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
@@ -308,9 +310,9 @@ export function Collection() {
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base">Collection</h2>
         <div className="flex gap-2">
-          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={importImages} disabled={importing}>Images Shopify</button>
-          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>Importer CSV</button>
-          <button className="btn" onClick={newSheet}>+ Nouveau modèle</button>
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={importImages} disabled={importing}>{t('Images Shopify')}</button>
+          <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>{t('Importer CSV')}</button>
+          <button className="btn" onClick={newSheet}>{t('+ Nouveau modèle')}</button>
         </div>
       </div>
       <div className="text-xs text-white/40 mb-3">{validated} modèle(s) validé(s) · {products.length} déclinaison(s)</div>
@@ -350,7 +352,7 @@ export function Collection() {
       {listMode === 'edit' && (
         <input
           className="field mb-3"
-          placeholder="Rechercher (SKU ou nom)…"
+          placeholder={t('Rechercher (SKU ou nom)…')}
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -419,17 +421,17 @@ export function Collection() {
     return (
       <div className="card">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base">{editingId ? 'Fiche technique' : 'Nouvelle fiche technique'}</h2>
-          <button className="text-white/50 text-sm" onClick={() => setView('list')}>← Catalogue</button>
+          <h2 className="text-base">{editingId ? t('Fiche technique') : t('Nouvelle fiche technique')}</h2>
+          <button className="text-white/50 text-sm" onClick={() => setView('list')}>{t('← Catalogue')}</button>
         </div>
 
         <div className="text-center mb-4">
-          <div className="text-xs text-white/40">SKU généré</div>
+          <div className="text-xs text-white/40">{t('SKU généré')}</div>
           <div className="text-xl font-semibold tracking-wider text-azure break-all">{liveSku(form)}</div>
         </div>
 
         <Section title="1. Identification">
-          <F label="Nom produit *"><input className="field" value={form.name} onChange={setInput('name')} /></F>
+          <F label={t('Nom produit *')}><input className="field" value={form.name} onChange={setInput('name')} /></F>
           <F label="Modèle"><RefSelect category="models" value={form.modelCode} onChange={set('modelCode')} /></F>
           <F label="Matière (ID)"><input className="field" value={form.materialCode} onChange={setInput('materialCode')} placeholder="CU002 / CE001" /></F>
           <F label="Couleur"><RefSelect category="colors" value={form.colorCode} onChange={set('colorCode')} /></F>
@@ -539,8 +541,8 @@ export function Collection() {
         <Section title="8. Statut">
           <F label="Statut">
             <select className="field" value={form.status} onChange={(e) => set('status')(e.target.value)}>
-              <option value="DRAFT">Brouillon</option>
-              <option value="VALIDATED">Validé</option>
+              <option value="DRAFT">{t('Brouillon')}</option>
+              <option value="VALIDATED">{t('Validé')}</option>
             </select>
           </F>
         </Section>
@@ -549,13 +551,13 @@ export function Collection() {
         {info && <p className="text-green-400 text-sm mt-2">{info}</p>}
 
         <div className="grid grid-cols-2 gap-3 mt-4">
-          <button className="btn" onClick={save} disabled={saving}>{saving ? '…' : 'Sauvegarder la fiche'}</button>
+          <button className="btn" onClick={save} disabled={saving}>{saving ? '…' : t('Sauvegarder la fiche')}</button>
           <button className="btn" onClick={syncShopify} disabled={saving || !editingId} title={editingId ? '' : 'Enregistre d’abord'}>
-            {shopifyId ? 'Re-sync Shopify' : 'Sync Shopify'}
+            {shopifyId ? t('Re-sync Shopify') : t('Sync Shopify')}
           </button>
         </div>
         {editingId && (
-          <button className="text-red-400 text-sm mt-3" onClick={remove}>Supprimer la fiche</button>
+          <button className="text-red-400 text-sm mt-3" onClick={remove}>{t('Supprimer la fiche')}</button>
         )}
       </div>
     );
@@ -607,10 +609,11 @@ function CatalogAvail({ catalog }: { catalog: Avail[] | null }) {
 }
 
 function StatusBadge({ status }: { status: 'DRAFT' | 'VALIDATED' }) {
+  const { t } = useI18n();
   return status === 'VALIDATED' ? (
-    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">Validé</span>
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">{t('Validé')}</span>
   ) : (
-    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">Brouillon</span>
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">{t('Brouillon')}</span>
   );
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Tabs } from '../components/ui';
+import { useI18n } from '../i18n';
 
 interface RefItem {
   id: string;
@@ -51,6 +52,7 @@ export function Admin() {
 }
 
 function GlobalSettings() {
+  const { t } = useI18n();
   const [shipping, setShipping] = useState('');
   const [msg, setMsg] = useState('');
   useEffect(() => {
@@ -67,13 +69,13 @@ function GlobalSettings() {
   }
   return (
     <div className="card mb-4">
-      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">Frais de port globaux (Expédié DDP)</div>
+      <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Frais de port globaux (Expédié DDP)')}</div>
       <div className="flex gap-2 items-end">
         <div className="flex-1">
-          <label className="block text-xs font-semibold mb-1">Montant $ (pré-rempli au POS)</label>
+          <label className="block text-xs font-semibold mb-1">{t('Montant $ (pré-rempli au POS)')}</label>
           <input className="field" type="number" step="0.01" placeholder="ex. 100" value={shipping} onChange={(e) => setShipping(e.target.value)} />
         </div>
-        <button className="btn" onClick={save}>Enregistrer</button>
+        <button className="btn" onClick={save}>{t('Enregistrer')}</button>
         {msg && <span className="text-green-400 text-xs">{msg}</span>}
       </div>
     </div>
@@ -81,6 +83,7 @@ function GlobalSettings() {
 }
 
 function RefAdmin() {
+  const { t } = useI18n();
   const [cats, setCats] = useState<string[]>([]);
   const [cat, setCat] = useState('');
   const [items, setItems] = useState<RefItem[]>([]);
@@ -178,8 +181,8 @@ function RefAdmin() {
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-1">
-        <h2 className="text-base">Admin — Référentiel (base de données)</h2>
-        <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>Importer CSV</button>
+        <h2 className="text-base">{t('Admin — Référentiel (base de données)')}</h2>
+        <button className="px-3 py-1 rounded border border-white/20 text-white/70 text-sm" onClick={() => setShowImport(!showImport)}>{t('Importer CSV')}</button>
       </div>
       <p className="text-white/40 text-xs mb-4">
         Les valeurs qui pré-remplissent les formulaires (Collection, POS…).
@@ -199,7 +202,7 @@ function RefAdmin() {
         </div>
       )}
 
-      <label className="block text-xs font-semibold mb-1">Catégorie</label>
+      <label className="block text-xs font-semibold mb-1">{t('Catégorie')}</label>
       <select className="field mb-4" value={cat} onChange={(e) => setCat(e.target.value)}>
         {cats.map((c) => (
           <option key={c} value={c}>
@@ -210,15 +213,15 @@ function RefAdmin() {
 
       <div className="flex gap-2 items-end mb-3">
         <div className="w-28">
-          <label className="block text-xs font-semibold mb-1">Code / ID</label>
+          <label className="block text-xs font-semibold mb-1">{t('Code / ID')}</label>
           <input className="field" value={code} onChange={(e) => setCode(e.target.value)} placeholder="AA009" />
         </div>
         <div className="flex-1">
-          <label className="block text-xs font-semibold mb-1">Libellé</label>
-          <input className="field" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nom" />
+          <label className="block text-xs font-semibold mb-1">{t('Libellé')}</label>
+          <input className="field" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('Libellé')} />
         </div>
         <button className="btn" onClick={add}>
-          Ajouter
+          {t('Ajouter')}
         </button>
       </div>
       {err && <p className="text-red-400 text-sm">{err}</p>}
@@ -227,8 +230,8 @@ function RefAdmin() {
       <table className="w-full text-sm mt-2">
         <thead className="text-white/50 text-left">
           <tr>
-            <th className="py-1 w-28">Code</th>
-            <th className="py-1">Libellé</th>
+            <th className="py-1 w-28">{t('Code')}</th>
+            <th className="py-1">{t('Libellé')}</th>
             <th className="py-1 w-10"></th>
           </tr>
         </thead>
@@ -251,7 +254,7 @@ function RefAdmin() {
                   </>
                 ) : (
                   <>
-                    <button className="text-azure text-xs mr-3" onClick={() => { setEditId(it.id); setEditLabel(it.label); }}>Modifier</button>
+                    <button className="text-azure text-xs mr-3" onClick={() => { setEditId(it.id); setEditLabel(it.label); }}>{t('Modifier')}</button>
                     <button className="text-red-400/70 hover:text-red-400" onClick={() => remove(it.id)} title="Supprimer">✕</button>
                   </>
                 )}
@@ -292,6 +295,7 @@ const MODULES: [string, string][] = [
 const EMPTY_USER = { email: '', password: '', firstName: '', lastName: '', role: 'SELLER' as 'ADMIN' | 'SELLER', permissions: [] as string[] };
 
 function UsersAdmin() {
+  const { t } = useI18n();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -352,8 +356,8 @@ function UsersAdmin() {
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base">Gestion des utilisateurs</h2>
-        <button className="btn" onClick={openNew}>+ Utilisateur</button>
+        <h2 className="text-base">{t('Gestion des utilisateurs')}</h2>
+        <button className="btn" onClick={openNew}>{t('+ Utilisateur')}</button>
       </div>
       {err && <p className="text-red-400 text-sm mb-2">{err}</p>}
       {msg && <p className="text-green-400 text-sm mb-2">{msg}</p>}
@@ -361,29 +365,29 @@ function UsersAdmin() {
       {adding && (
         <div className="border border-white/10 rounded p-3 mb-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <input className="field" placeholder="Prénom" value={f.firstName} onChange={(e) => setF({ ...f, firstName: e.target.value })} />
-            <input className="field" placeholder="Nom" value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.target.value })} />
-            <input className="field" type="email" placeholder="Email" value={f.email} disabled={!!editingId} onChange={(e) => setF({ ...f, email: e.target.value })} />
-            <input className="field" type="password" placeholder={editingId ? 'Nouveau mot de passe (option)' : 'Mot de passe'} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
+            <input className="field" placeholder={t('Prénom')} value={f.firstName} onChange={(e) => setF({ ...f, firstName: e.target.value })} />
+            <input className="field" placeholder={t('Nom')} value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.target.value })} />
+            <input className="field" type="email" placeholder={t('Email')} value={f.email} disabled={!!editingId} onChange={(e) => setF({ ...f, email: e.target.value })} />
+            <input className="field" type="password" placeholder={editingId ? t('Nouveau mot de passe (option)') : t('Mot de passe')} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
           </div>
           <select className="field" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as 'ADMIN' | 'SELLER' })}>
-            <option value="SELLER">Vendeur</option>
-            <option value="ADMIN">Administrateur</option>
+            <option value="SELLER">{t('Vendeur')}</option>
+            <option value="ADMIN">{t('Administrateur')}</option>
           </select>
           <div>
-            <div className="text-[11px] text-white/40 mb-1">Accès par module</div>
+            <div className="text-[11px] text-white/40 mb-1">{t('Accès par module')}</div>
             <div className="flex flex-wrap gap-2">
               {MODULES.map(([code, label]) => (
                 <label key={code} className={'text-xs px-2 py-1 rounded border cursor-pointer ' + (f.permissions.includes(code) ? 'border-azure text-azure' : 'border-white/20 text-white/50')}>
                   <input type="checkbox" className="hidden" checked={f.permissions.includes(code)} onChange={() => togglePerm(code)} />
-                  {label}
+                  {t(label)}
                 </label>
               ))}
             </div>
           </div>
           <div className="flex gap-2">
-            <button className="btn flex-1" onClick={save}>{editingId ? 'Enregistrer' : 'Créer'}</button>
-            <button className="text-white/50 text-sm px-3" onClick={() => setAdding(false)}>Annuler</button>
+            <button className="btn flex-1" onClick={save}>{editingId ? t('Enregistrer') : t('Créer')}</button>
+            <button className="text-white/50 text-sm px-3" onClick={() => setAdding(false)}>{t('Annuler')}</button>
           </div>
         </div>
       )}
@@ -391,18 +395,18 @@ function UsersAdmin() {
       {users.map((u) => (
         <div key={u.id} className="flex items-center justify-between py-2 border-b border-white/10">
           <div>
-            <div className="font-semibold text-sm">{[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} {!u.active && <span className="text-red-400 text-[11px]">(inactif)</span>}</div>
+            <div className="font-semibold text-sm">{[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} {!u.active && <span className="text-red-400 text-[11px]">({t('Inactif')})</span>}</div>
             <div className="text-white/50 text-[11px]">
-              {u.role === 'ADMIN' ? 'Admin' : 'Vendeur'} · accès : [{u.permissions.length ? u.permissions.join(', ') : 'aucun'}]
+              {u.role === 'ADMIN' ? t('Administrateur') : t('Vendeur')} · {u.permissions.length ? u.permissions.join(', ') : '—'}
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="text-azure text-xs" onClick={() => openEdit(u)}>Modifier</button>
+            <button className="text-azure text-xs" onClick={() => openEdit(u)}>{t('Modifier')}</button>
             <button className="text-red-400/70 text-xs" onClick={() => remove(u.id)}>✕</button>
           </div>
         </div>
       ))}
-      {users.length === 0 && <p className="text-white/40 text-sm py-2">Aucun utilisateur.</p>}
+      {users.length === 0 && <p className="text-white/40 text-sm py-2">{t('Aucun utilisateur.')}</p>}
     </div>
   );
 }
