@@ -123,7 +123,8 @@ export function Collection() {
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
   const [saving, setSaving] = useState(false);
-  const [listMode, setListMode] = useState<'edit' | 'avail'>('edit');
+  const [listMode, setListMode] = useState<'edit' | 'avail' | 'check'>('edit');
+  const [check, setCheck] = useState<{ total: number; incomplete: number; items: { id: string; sku: string; name: string; status: string; missing: string[] }[] } | null>(null);
   const [catalog, setCatalog] = useState<Avail[] | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [csvText, setCsvText] = useState('');
@@ -185,6 +186,10 @@ export function Collection() {
     if (view === 'list' && listMode === 'avail') {
       setCatalog(null);
       api<Avail[]>('/api/catalog').then(setCatalog).catch((e) => setErr((e as Error).message));
+    }
+    if (view === 'list' && listMode === 'check') {
+      setCheck(null);
+      api<typeof check>('/api/products/incomplete').then(setCheck).catch((e) => setErr((e as Error).message));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, listMode]);
@@ -348,7 +353,7 @@ export function Collection() {
       )}
 
       <div className="mb-3">
-        <Tabs active={listMode} onChange={setListMode} tabs={[['edit', 'Édition'], ['avail', 'Catalogue & délais']] as ['edit' | 'avail', string][]} />
+        <Tabs active={listMode} onChange={setListMode} tabs={[['edit', 'Édition'], ['avail', 'Catalogue & délais'], ['check', 'Contrôle']] as ['edit' | 'avail' | 'check', string][]} />
       </div>
 
       {listMode === 'edit' && (
@@ -365,6 +370,34 @@ export function Collection() {
       {err && <p className="text-red-400 text-sm">{err}</p>}
 
       {listMode === 'avail' && <CatalogAvail catalog={catalog} />}
+
+      {listMode === 'check' && (
+        <div>
+          {!check && <p className="text-white/40 text-sm">{t('common.loading')}</p>}
+          {check && (
+            <>
+              <div className="text-xs text-white/50 mb-3">
+                {check.incomplete} / {check.total} {t('fiche(s) à compléter')}
+              </div>
+              {check.items.map((it) => (
+                <button key={it.id} className="w-full text-left flex items-start justify-between gap-2 py-2 border-b border-white/10" onClick={() => edit(it.id)}>
+                  <div className="min-w-0">
+                    <div className="font-mono text-azure text-xs">{it.sku}</div>
+                    <div className="text-sm truncate">{it.name}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {it.missing.map((m) => (
+                        <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300">{m}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <span className="text-azure text-xs shrink-0">{t('Modifier')}</span>
+                </button>
+              ))}
+              {check.items.length === 0 && <p className="text-green-400/80 text-sm">{t('Toutes les fiches sont complètes ✓')}</p>}
+            </>
+          )}
+        </div>
+      )}
 
       {listMode === 'edit' && Object.keys(tree).length === 0 && (
         <p className="py-3 text-white/40 text-sm">Aucune fiche. Crée-en une avec « + Nouveau modèle ».</p>

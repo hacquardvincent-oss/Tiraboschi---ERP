@@ -58,6 +58,30 @@ productsRouter.get('/', async (req, res) => {
   res.json(await prisma.product.findMany({ where, orderBy: { updatedAt: 'desc' }, take: 300 }));
 });
 
+// Contrôle qualité : fiches incomplètes (données manquantes importantes pour la vente)
+productsRouter.get('/incomplete', async (_req, res) => {
+  const products = await prisma.product.findMany({
+    orderBy: { name: 'asc' },
+    include: { _count: { select: { bomLines: true } } },
+  });
+  const caps = await prisma.workshopCapability.findMany({ select: { modelCode: true } });
+  const capable = new Set(caps.map((c) => c.modelCode));
+  const items = products
+    .map((p) => {
+      const missing: string[] = [];
+      if (p.priceHtEur == null && p.priceHtUsd == null) missing.push('prix');
+      if (p._count.bomLines === 0) missing.push('nomenclature');
+      if (!p.modelCode || !capable.has(p.modelCode)) missing.push('atelier');
+      if (!p.hsCode) missing.push('code HS');
+      if (!p.countryOrigin) missing.push('origine');
+      if (!p.imageUrl) missing.push('image');
+      if (p.status !== 'VALIDATED') missing.push('non validé');
+      return { id: p.id, sku: p.sku, name: p.name, status: p.status, missing };
+    })
+    .filter((r) => r.missing.length > 0);
+  res.json({ total: products.length, incomplete: items.length, items });
+});
+
 productsRouter.get('/:id', async (req, res) => {
   const p = await prisma.product.findUnique({
     where: { id: req.params.id },

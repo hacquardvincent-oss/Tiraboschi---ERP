@@ -135,6 +135,9 @@ const EN: Record<string, string> = {
   'Fiches techniques': 'Tech sheets',
   'Édition': 'Editing',
   'Catalogue & délais': 'Catalog & lead times',
+  'Contrôle': 'Quality check',
+  'fiche(s) à compléter': 'sheet(s) to complete',
+  'Toutes les fiches sont complètes ✓': 'All sheets are complete ✓',
   'En stock': 'In stock',
   'Sur commande': 'Made to order',
   // OPS
