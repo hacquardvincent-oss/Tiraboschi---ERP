@@ -295,9 +295,11 @@ export function Collection() {
     if (!t) return true;
     return p.sku.toLowerCase().includes(t) || p.name.toLowerCase().includes(t);
   });
+  // Nom de modèle = 1er segment du nom produit ("Jane – Cuir Caviar – Noir" → "Jane")
+  const modelName = (p: Product) => (p.name?.split(/[–—-]/)[0] ?? '').trim() || p.modelCode || '(sans modèle)';
   const tree: Record<string, Record<string, Record<string, Product[]>>> = {};
   for (const p of filtered) {
-    const m = p.modelCode || p.name || '(sans modèle)';
+    const m = modelName(p);
     const mat = p.materialCode || '—';
     const opt = p.optionCode || '—';
     ((tree[m] ??= {})[mat] ??= {})[opt] ??= [];
@@ -391,7 +393,7 @@ export function Collection() {
                         {decls.map((p) => (
                           <div key={p.id} className="flex items-center justify-between py-1 text-sm border-b border-white/5">
                             <div className="flex items-center gap-2">
-                              <Thumb src={p.imageUrl} alt={p.name} size={28} />
+                              <Thumb src={p.imageUrl} alt={p.name} size={48} />
                               <span className="font-mono text-azure text-xs">{p.sku}</span>
                               <StatusBadge status={p.status} />
                             </div>
@@ -588,7 +590,7 @@ function CatalogAvail({ catalog }: { catalog: Avail[] | null }) {
           <div key={a.productId} className="py-1.5 border-b border-white/10">
             <div className="flex items-center justify-between text-sm gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <Thumb src={a.imageUrl} alt={a.name} size={36} />
+                <Thumb src={a.imageUrl} alt={a.name} size={56} />
                 <div className="min-w-0">
                   <div className="font-mono text-azure text-xs">{a.sku}</div>
                   <div className="truncate">{a.name}</div>
