@@ -175,32 +175,73 @@ export function Inventaire() {
   );
 }
 
+interface Dash {
+  materials: { total: number; value: number; lowStock: number; ruptures: number; lowStockList: { code: string; name: string; stock: number; unit: string }[] };
+  production: { requested: number; transit: number; inProduction: number; qc: number; received: number };
+  fulfillment: { toPrepare: number; ready: number; shipped: number };
+  piecesAvailable: number;
+  workshops: number;
+}
+
 function DashboardTab({ onErr }: { onErr: (s: string) => void }) {
   const { t } = useI18n();
-  const [s, setS] = useState<Summary | null>(null);
+  const [d, setD] = useState<Dash | null>(null);
   useEffect(() => {
-    api<Summary>('/api/erp/summary').then(setS).catch((e) => onErr((e as Error).message));
+    api<Dash>('/api/erp/dashboard').then(setD).catch((e) => onErr((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (!s) return <p className="text-white/40 text-sm">{t('common.loading')}</p>;
+  if (!d) return <p className="text-white/40 text-sm">{t('common.loading')}</p>;
+  const prodActive = d.production.requested + d.production.transit + d.production.inProduction + d.production.qc;
   return (
     <>
-      <div className="grid grid-cols-3 gap-3">
-        <Kpi label={t('Alertes matières')} value={String(s.alerts.length)} alert={s.alerts.length > 0} />
-        <Kpi label={t('Prods en cours')} value={String(s.productionCount)} />
-        <Kpi label={t('Pièces reçues')} value={String(s.piecesTotal)} />
+      <div className="grid grid-cols-2 gap-3">
+        <Kpi label={t('Valeur stock matières')} value={d.materials.value.toLocaleString('fr-FR') + ' €'} />
+        <Kpi label={t('Ruptures')} value={String(d.materials.ruptures)} alert={d.materials.ruptures > 0} />
+        <Kpi label={t('Alertes matières')} value={String(d.materials.lowStock)} alert={d.materials.lowStock > 0} />
+        <Kpi label={t('Prods en cours')} value={String(prodActive)} />
+        <Kpi label={t('Pièces dispo')} value={String(d.piecesAvailable)} />
+        <Kpi label={t('À préparer')} value={String(d.fulfillment.toPrepare)} alert={d.fulfillment.toPrepare > 0} />
       </div>
+
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Production')}</div>
+        <div className="grid grid-cols-4 gap-2 text-center text-sm">
+          <Mini label={t('Demandé')} value={d.production.requested} />
+          <Mini label={t('Transit')} value={d.production.transit} />
+          <Mini label={t('En prod.')} value={d.production.inProduction} />
+          <Mini label={t('QC')} value={d.production.qc} />
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Envoi client')}</div>
+        <div className="grid grid-cols-3 gap-2 text-center text-sm">
+          <Mini label={t('À préparer')} value={d.fulfillment.toPrepare} />
+          <Mini label={t('Prêtes')} value={d.fulfillment.ready} />
+          <Mini label={t('Expédiées')} value={d.fulfillment.shipped} />
+        </div>
+      </div>
+
       <div className="card">
         <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Alertes stock')}</div>
-        {s.alerts.length === 0 && <p className="text-white/40 text-sm">{t('Aucune alerte.')}</p>}
-        {s.alerts.map((m) => (
-          <div key={m.id} className="flex justify-between py-1 text-sm border-b border-white/10">
+        {d.materials.lowStockList.length === 0 && <p className="text-white/40 text-sm">{t('Aucune alerte.')}</p>}
+        {d.materials.lowStockList.map((m) => (
+          <div key={m.code} className="flex justify-between py-1 text-sm border-b border-white/10">
             <span>{m.code} — {m.name}</span>
-            <span className="text-red-400">{m.stock} {m.unit}</span>
+            <span className={m.stock <= 0 ? 'text-red-400' : 'text-amber-400'}>{m.stock} {m.unit}</span>
           </div>
         ))}
       </div>
     </>
+  );
+}
+
+function Mini({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded bg-white/5 py-2">
+      <div className="text-lg font-semibold text-azure">{value}</div>
+      <div className="text-[10px] text-white/50">{label}</div>
+    </div>
   );
 }
 

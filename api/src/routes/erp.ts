@@ -190,7 +190,7 @@ erpRouter.post('/stock-movements', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-// ─── Synthèse OPS (dashboard + stock courant par matière + alertes) ───────────
+// ─── Synthèse OPS (dashboard + stock courant par matière + alertes) ────────────
 erpRouter.get('/summary', async (_req, res) => {
   try {
     const [materials, sums, productionCount, piecesAgg] = await Promise.all([
@@ -212,6 +212,47 @@ erpRouter.get('/summary', async (_req, res) => {
       alerts: withStock.filter((m) => m.lowStock),
       productionCount,
       piecesTotal: Number(piecesAgg._sum.quantity ?? 0),
+    });
+  } catch (e) { fail(res, e); }
+});
+
+// Tableau de bord de pilotage (matières, ruptures, production, ateliers, envoi client)
+erpRouter.get('/dashboard', async (_req, res) => {
+  try {
+    const [materials, sums, prodByStatus, fulfillByStatus, piecesAvailable, workshops] = await Promise.all([
+      prisma.material.findMany(),
+      prisma.stockMovement.groupBy({ by: ['materialId'], _sum: { quantity: true } }),
+      prisma.productionOrder.groupBy({ by: ['status'], _count: { _all: true } }),
+      prisma.fulfillmentTask.groupBy({ by: ['status'], _count: { _all: true } }),
+      prisma.serial.count({ where: { status: 'AVAILABLE' } }),
+      prisma.workshop.count(),
+    ]);
+    const stockByMat = new Map(sums.map((s) => [s.materialId, Number(s._sum.quantity ?? 0)]));
+    let materialsValue = 0;
+    const lowStock: { code: string; name: string; stock: number; unit: string }[] = [];
+    for (const m of materials) {
+      const stock = stockByMat.get(m.id) ?? 0;
+      if (m.unitCost != null && stock > 0) materialsValue += stock * Number(m.unitCost);
+      const threshold = m.reorderThreshold != null ? Number(m.reorderThreshold) : null;
+      if (stock <= 0 || (threshold != null && stock <= threshold)) lowStock.push({ code: m.code, name: m.name, stock, unit: m.unit });
+    }
+    const countOf = (rows: { status: string; _count: { _all: number } }[], st: string) => rows.find((r) => r.status === st)?._count._all ?? 0;
+    res.json({
+      materials: { total: materials.length, value: Math.round(materialsValue), lowStock: lowStock.length, ruptures: lowStock.filter((m) => m.stock <= 0).length, lowStockList: lowStock.slice(0, 20) },
+      production: {
+        requested: countOf(prodByStatus, 'REQUESTED'),
+        transit: countOf(prodByStatus, 'MATERIALS_IN_TRANSIT'),
+        inProduction: countOf(prodByStatus, 'IN_PRODUCTION'),
+        qc: countOf(prodByStatus, 'QC'),
+        received: countOf(prodByStatus, 'RECEIVED'),
+      },
+      fulfillment: {
+        toPrepare: countOf(fulfillByStatus, 'TO_PREPARE'),
+        ready: countOf(fulfillByStatus, 'READY'),
+        shipped: countOf(fulfillByStatus, 'SHIPPED'),
+      },
+      piecesAvailable,
+      workshops,
     });
   } catch (e) { fail(res, e); }
 });
