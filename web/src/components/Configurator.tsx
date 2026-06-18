@@ -14,103 +14,74 @@ export interface ConfigProduct {
   optionCode?: string | null;
   colorCode?: string | null;
 }
-interface RefItem {
-  code: string;
-  label: string;
-}
+interface RefItem { code: string; label: string }
+
+const modelName = (p: ConfigProduct) => (p.name?.split(/[–—-]/)[0] ?? '').trim() || p.modelCode || '(modèle)';
 
 /**
- * Configurateur de vente guidé : Modèle → Matière → Option → Coloris.
- * Chaque coloris est une déclinaison réelle (produit) ajoutée au panier.
+ * Configurateur de vente par listes déroulantes : Modèle → Matière → Option → Coloris.
+ * Le sélecteur de modèle reste toujours accessible (on enchaîne plusieurs modèles sans repartir de zéro).
  */
 export function Configurator({ currency, onAdd }: { currency: 'EUR' | 'USD'; onAdd: (p: ConfigProduct) => void }) {
   const [products, setProducts] = useState<ConfigProduct[]>([]);
   const [labels, setLabels] = useState<Record<string, Map<string, string>>>({});
-  const [model, setModel] = useState<string | null>(null);
-  const [material, setMaterial] = useState<string | null>(null);
-  const [option, setOption] = useState<string | null>(null);
+  const [model, setModel] = useState('');
+  const [material, setMaterial] = useState('');
+  const [option, setOption] = useState('');
+  const [color, setColor] = useState('');
 
   useEffect(() => {
     api<ConfigProduct[]>('/api/products?q=').then(setProducts).catch(() => setProducts([]));
     Promise.all(
-      (['models', 'materials', 'options', 'colors'] as const).map((c) =>
+      (['materials', 'options', 'colors'] as const).map((c) =>
         api<RefItem[]>('/api/ref/' + c).then((r) => [c, new Map(r.map((x) => [x.code, x.label]))] as const).catch(() => [c, new Map()] as const),
       ),
-    ).then((entries) => setLabels(Object.fromEntries(entries)));
+    ).then((e) => setLabels(Object.fromEntries(e)));
   }, []);
 
-  const lab = (cat: string, code?: string | null) => (code ? labels[cat]?.get(code) ?? code : '—');
-  const fmt = (p: ConfigProduct) => {
-    const v = parseFloat((currency === 'EUR' ? p.priceHtEur : p.priceHtUsd) ?? '0') || 0;
-    return v.toFixed(2) + (currency === 'EUR' ? ' €' : ' $');
-  };
+  const lab = (cat: string, code: string, prefix = '') => labels[cat]?.get(code) ?? (prefix ? prefix + ' ' + code : code);
+  const price = (p: ConfigProduct) => parseFloat((currency === 'EUR' ? p.priceHtEur : p.priceHtUsd) ?? '0') || 0;
+  const fmt = (p: ConfigProduct) => price(p).toFixed(2) + (currency === 'EUR' ? ' €' : ' $');
+  const uniq = (arr: (string | null | undefined)[]) => [...new Set(arr.filter((x): x is string => !!x))];
 
-  const distinct = (key: keyof ConfigProduct, filter: (p: ConfigProduct) => boolean) => {
-    const seen = new Set<string>();
-    for (const p of products) {
-      if (!filter(p)) continue;
-      const v = (p[key] as string | null) ?? '';
-      if (v) seen.add(v);
-    }
-    return [...seen];
-  };
-
-  const models = useMemo(() => distinct('modelCode', () => true), [products]);
-  const materials = useMemo(() => distinct('materialCode', (p) => p.modelCode === model), [products, model]);
-  const options = useMemo(() => distinct('optionCode', (p) => p.modelCode === model && p.materialCode === material), [products, model, material]);
-  const colors = useMemo(
-    () => products.filter((p) => p.modelCode === model && p.materialCode === material && p.optionCode === option),
-    [products, model, material, option],
-  );
-
-  const Chip = ({ on, children, onClick }: { on?: boolean; children: React.ReactNode; onClick: () => void }) => (
-    <button
-      className={'px-3 py-2 rounded border text-sm ' + (on ? 'border-gold text-gold' : 'border-white/20 text-white/70 hover:border-white/40')}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
+  const models = useMemo(() => uniq(products.map(modelName)).sort(), [products]);
+  const ofModel = useMemo(() => products.filter((p) => modelName(p) === model), [products, model]);
+  const materials = useMemo(() => uniq(ofModel.map((p) => p.materialCode)), [ofModel]);
+  const ofMaterial = useMemo(() => ofModel.filter((p) => p.materialCode === material), [ofModel, material]);
+  const options = useMemo(() => uniq(ofMaterial.map((p) => p.optionCode)), [ofMaterial]);
+  const ofOption = useMemo(() => ofMaterial.filter((p) => p.optionCode === option), [ofMaterial, option]);
+  const selected = ofOption.find((p) => p.colorCode === color) ?? null;
 
   return (
-    <div className="mt-2 border border-white/10 rounded p-3 space-y-3">
-      {/* Fil d'Ariane */}
-      <div className="text-[11px] text-white/40 flex flex-wrap gap-1">
-        <button className={model ? 'text-azure' : 'text-gold'} onClick={() => { setModel(null); setMaterial(null); setOption(null); }}>Modèle</button>
-        {model && <>· <button className={material ? 'text-azure' : 'text-gold'} onClick={() => { setMaterial(null); setOption(null); }}>{lab('models', model)}</button></>}
-        {material && <>· <button className={option ? 'text-azure' : 'text-gold'} onClick={() => setOption(null)}>{lab('materials', material)}</button></>}
-        {option && <>· <span className="text-gold">{option}</span></>}
-      </div>
-
-      {!model && (
-        <div className="flex flex-wrap gap-2">
-          {models.map((m) => <Chip key={m} onClick={() => setModel(m)}>{lab('models', m)}</Chip>)}
-          {models.length === 0 && <span className="text-white/40 text-xs">Aucun produit. Importe le catalogue.</span>}
-        </div>
+    <div className="mt-2 space-y-2">
+      <select className="field" value={model} onChange={(e) => { setModel(e.target.value); setMaterial(''); setOption(''); setColor(''); }}>
+        <option value="">— Modèle —</option>
+        {models.map((m) => <option key={m} value={m}>{m}</option>)}
+        {models.length === 0 && <option disabled>Aucun produit — importe le catalogue</option>}
+      </select>
+      {model && (
+        <select className="field" value={material} onChange={(e) => { setMaterial(e.target.value); setOption(''); setColor(''); }}>
+          <option value="">— Matière —</option>
+          {materials.map((c) => <option key={c} value={c}>{lab('materials', c)}</option>)}
+        </select>
       )}
-      {model && !material && (
-        <div className="flex flex-wrap gap-2">
-          {materials.map((m) => <Chip key={m} onClick={() => setMaterial(m)}>{lab('materials', m)}</Chip>)}
-        </div>
-      )}
-      {model && material && !option && (
-        <div className="flex flex-wrap gap-2">
-          {options.map((o) => <Chip key={o} onClick={() => setOption(o)}>Option {o}</Chip>)}
-        </div>
+      {model && material && (
+        <select className="field" value={option} onChange={(e) => { setOption(e.target.value); setColor(''); }}>
+          <option value="">— Option —</option>
+          {options.map((c) => <option key={c} value={c}>{lab('options', c, 'Option')}</option>)}
+        </select>
       )}
       {model && material && option && (
-        <div className="space-y-1">
-          {colors.map((p) => (
-            <button key={p.id} className="w-full flex items-center gap-3 text-left px-2 py-2 rounded hover:bg-white/5" onClick={() => onAdd(p)}>
-              <Thumb src={p.imageUrl} alt={p.name} size={36} />
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm">{lab('colors', p.colorCode)}</span>
-                <span className="font-mono text-azure text-[11px]">{p.sku}</span>
-              </span>
-              <span className="text-sm">{fmt(p)}</span>
-            </button>
-          ))}
-        </div>
+        <select className="field" value={color} onChange={(e) => setColor(e.target.value)}>
+          <option value="">— Coloris —</option>
+          {ofOption.map((p) => <option key={p.id} value={p.colorCode ?? ''}>{lab('colors', p.colorCode ?? '')}</option>)}
+        </select>
+      )}
+      {selected && (
+        <button className="btn w-full flex items-center gap-3 justify-center" onClick={() => { onAdd(selected); setColor(''); }}>
+          <Thumb src={selected.imageUrl} alt={selected.name} size={28} />
+          + {selected.name} · {fmt(selected)}
+        </button>
       )}
     </div>
   );

@@ -540,6 +540,8 @@ export function Pos() {
           </div>
         ))}
 
+        {cart.length > 0 && <CrossSell currency={currency} onAdd={add} />}
+
         <div className="flex items-center gap-2 mt-3 text-sm flex-wrap">
           <button className={'px-3 py-1.5 rounded border ' + (!ddp ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setDdp(false)}>{t('Sur place')}</button>
           <button className={'px-3 py-1.5 rounded border ' + (ddp ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setDdp(true)}>{t('À distance')}</button>
@@ -655,6 +657,35 @@ export function Pos() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Vente additionnelle (cross-sell) : ajout rapide d'accessoires courants au panier. */
+function CrossSell({ currency, onAdd }: { currency: 'EUR' | 'USD'; onAdd: (p: Product) => void }) {
+  const { t } = useI18n();
+  const [items, setItems] = useState<Product[]>([]);
+  useEffect(() => {
+    Promise.all(['Chaîne', 'Anse', 'Pochon', 'Strap'].map((q) =>
+      api<Product[]>('/api/products?q=' + encodeURIComponent(q)).then((r) => r[0] ?? null).catch(() => null),
+    )).then((rs) => {
+      const seen = new Set<string>();
+      setItems(rs.filter((p): p is Product => !!p && !seen.has(p.id) && (seen.add(p.id), true)));
+    });
+  }, []);
+  if (items.length === 0) return null;
+  const price = (p: Product) => parseFloat((currency === 'EUR' ? p.priceHtEur : p.priceHtUsd) ?? '0') || 0;
+  const label = (p: Product) => (p.name?.split(/[–—-]/)[0] ?? p.name).trim();
+  return (
+    <div className="mt-3">
+      <div className="text-[11px] text-white/40 mb-1">{t('Compléments')}</div>
+      <div className="flex flex-wrap gap-2">
+        {items.map((p) => (
+          <button key={p.id} className="text-xs px-2 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10" onClick={() => onAdd(p)}>
+            + {label(p)} · {price(p).toFixed(0)}{currency === 'EUR' ? '€' : '$'}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
