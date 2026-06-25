@@ -79,8 +79,15 @@ export function Pos() {
   const setErr = (m: string) => { if (m) toast(m, 'error'); }; // erreurs → toast
   const zipRef = useRef<HTMLInputElement>(null);
   const [zipError, setZipError] = useState(false);
-  // Le drapeau du téléphone suit la langue de l'app.
-  useEffect(() => { setCustomer((c) => ({ ...c, phoneExt: lang === 'fr' ? '+33' : '+1' })); }, [lang]);
+  const marketInit = useRef(true);
+  // Switch de marché (USD/EUR) : on adapte le formulaire aux contraintes du pays (comme la V1).
+  // → préfixe téléphone (+1/+33) + pays par défaut (US/FR). Le « zip obligatoire » suit déjà la devise.
+  useEffect(() => {
+    if (marketInit.current) { marketInit.current = false; return; } // pas au montage (ne pas écraser un client CRM pré-rempli)
+    setCustomer((c) => ({ ...c, phoneExt: currency === 'USD' ? '+1' : '+33', country: currency === 'USD' ? 'US' : 'FR' }));
+    setAddressValidated(false);
+    setTaxQuote(null);
+  }, [currency]);
   function focusZip() {
     setZipError(true);
     setClientOpen(true);
