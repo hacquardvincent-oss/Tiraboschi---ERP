@@ -230,11 +230,11 @@ Ces comportements de la V1 sont **volontairement absents** de la V2 (cf. CLAUDE.
 Top écarts ❌ / 🟡 à arbitrer pour garantir la parité métier :
 
 1. **🟡/❌ Consentement marketing RGPD** — cases email/SMS captées (`Pos.tsx:498-502`) mais jamais poussées vers Shopify (`services/shopify.ts:559-589`). À implémenter (`emailMarketingConsent`/`smsMarketingConsent`). NB : déjà cassé en V1.
-2. **❌ Encart workaround in-app-browser sur `/pay/:id`** (WhatsApp/Instagram « Ouvrir dans Safari ») — V1: server.js:344-345,375-389 ; absent de `routes/pay.ts`. Risque réel : clients ouvrant le lien depuis WhatsApp.
+2. **✅ FAIT — Workaround in-app-browser sur `/pay/:id`** — `routes/pay.ts` détecte désormais WhatsApp/Instagram/Messenger/etc. (`IN_APP_UA`), **supprime l'auto-redirect** dans ces cas et affiche l'aide « ouvrir dans Safari/Chrome ». Auto-redirect conservé sur navigateur normal.
 3. **🟡 Wizard POS 5 étapes + double mode prix Sur place/Expédié DDP par article** — V1: app.js:877-1002 ; V2 fait 3 niveaux + mode au checkout (`Configurator.tsx`, `Pos.tsx:572-579`). Vérifier que l'UX vendeur reste équivalente.
 4. **✅ DÉCISION — ZIP→État & bypass Markets : NON repris.** Shopify est la seule source de vérité de la Sales Tax (taux par État/ville/comté en temps réel). La V2 lui transmet l'adresse complète et utilise ses montants tels quels. On ne fige pas de table ZIP→État et on ne bypass pas Markets. Seule action : vérifier la config devise/Markets de la boutique en USD réel (pas de code).
 6. **❌ Champ commission vendeur** — V1: index.html:709 ; absent du modèle `User` V2. À ajouter si la paie commission est utilisée.
-7. **🟡 `/pay/:id` bilingue (EN/FR selon session)** — V1: server.js:336-346 ; V2 FR uniquement (`routes/pay.ts`).
+7. **✅ FAIT — `/pay/:id` bilingue (EN/FR)** — `routes/pay.ts` : EN pour le marché US (devise USD), FR sinon ; tous les textes traduits.
 8. **🟡 KPI « emails opt-in »** non calculé — V1: server.js:697-699 ; absent de `getReports` (`services/shopify.ts:230-286`).
 9. **🟡 Note de commande libre côté POS** — V1: index.html:260-262 ; V2 génère une note auto mais pas de champ vendeur libre.
 10. **❌ Pavé PIN de connexion** — V1: app.js:2322-2330 ; V2 = email+mot de passe. À trancher (ergonomie Trunk Show vs sécurité).
