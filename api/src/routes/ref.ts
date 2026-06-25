@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { importRefCsv, importRefMultiCsv, importRefFullCsv, exportRefCsv } from '../services/import';
-import { nextRefCode } from '../services/sku';
+import { nextRefCode, generateRefId } from '../services/sku';
 
 export const refRouter = Router();
 refRouter.use(requireAuth);
@@ -78,14 +78,22 @@ refRouter.get('/categories', async (_req, res) => {
   res.json(rows.map((r) => r.category));
 });
 
-/** Prochain code calculé pour une catégorie (générateur d'ID : couleurs ###, modèles AA###…). */
+/**
+ * Prochain code calculé pour une catégorie — règles EXACTES de la V1 (générateur d'ID éprouvé) :
+ * modèles AA###, couleurs ### (ignore ≥900), matières globales CU/CE###, fournisseurs/ateliers
+ * FOU-###/ATE-###, années (2 derniers chiffres), saisons H/E… Le libellé (?name=) sert aux
+ * règles qui en dépendent (années, saisons, CU/CE). `?prefix=` reste accepté (compat héritée).
+ */
 refRouter.get('/:category/next-code', async (req, res) => {
   const items = await prisma.refItem.findMany({
     where: { category: req.params.category },
     select: { code: true },
   });
-  const prefix = req.query.prefix != null ? String(req.query.prefix) : undefined;
-  res.json({ code: nextRefCode(items.map((i) => i.code), prefix) });
+  const codes = items.map((i) => i.code);
+  const name = req.query.name != null ? String(req.query.name) : '';
+  // Si un préfixe explicite est fourni (ancien appel), on garde le calcul générique ; sinon règles V1.
+  const code = req.query.prefix != null ? nextRefCode(codes, String(req.query.prefix)) : generateRefId(req.params.category, name, codes);
+  res.json({ code });
 });
 
 /** Items d'une catégorie (alimente les listes déroulantes des formulaires). Tri par code (ID). */

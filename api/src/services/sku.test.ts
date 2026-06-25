@@ -7,6 +7,7 @@ import {
   nextSequentialId,
   nextColorId,
   nextRefCode,
+  generateRefId,
 } from './sku';
 
 describe('moteur SKU (CDC)', () => {
@@ -77,6 +78,39 @@ describe('moteur SKU (CDC)', () => {
     });
     it('ignore les codes en texte libre (« chaine laiton ») pour ne pas casser le calcul', () => {
       expect(nextRefCode(['001', 'chaine laiton', '002'], '')).toBe('003');
+    });
+  });
+
+  describe('generateRefId (règles EXACTES de la V1)', () => {
+    it('modèles : préfixe fixe AA, paddé 3', () => {
+      expect(generateRefId('models', 'Nouveau', ['AA008', 'AA003'])).toBe('AA009');
+      expect(generateRefId('models', 'Premier', [])).toBe('AA001');
+    });
+    it('couleurs : séquence 3 chiffres, ignore ≥900 (Noir 999 réservé)', () => {
+      expect(generateRefId('colors', 'Bordeaux', ['001', '017', '999'])).toBe('018');
+      expect(generateRefId('colors', 'Premier', [])).toBe('001');
+    });
+    it('matières globales : CE si exceptionnel/exotique, sinon CU', () => {
+      expect(generateRefId('globalMaterials', 'Cuir Box', ['CU001', 'CU002'])).toBe('CU003');
+      expect(generateRefId('globalMaterials', 'Cuir Exotique Alligator', ['CE001'])).toBe('CE002');
+    });
+    it('options/tailles : séquence paddée 2', () => {
+      expect(generateRefId('options', 'Pochon', ['01', '02'])).toBe('03');
+      expect(generateRefId('sizes', 'M', [])).toBe('01');
+    });
+    it('années : 2 derniers chiffres du libellé', () => {
+      expect(generateRefId('years', '2026', [])).toBe('26');
+    });
+    it('saisons : H (hiver/automne) ou E (été/printemps)', () => {
+      expect(generateRefId('seasons', 'Hiver', [])).toBe('H');
+      expect(generateRefId('seasons', 'Printemps', [])).toBe('E');
+      expect(generateRefId('seasons', 'Été', [])).toBe('E');
+    });
+    it('catégories auto : PREFIX-### (fournisseurs FOU, ateliers ATE, bijouterie BIZ)', () => {
+      expect(generateRefId('suppliers', 'Tannerie X', ['FOU-001', 'FOU-002'])).toBe('FOU-003');
+      expect(generateRefId('ateliers', 'Atelier Paris', [])).toBe('ATE-001');
+      expect(generateRefId('jewelry', 'Fermoir or', ['BIZ-001'])).toBe('BIZ-002');
+      expect(generateRefId('hsCodes', '4202', [])).toBe('CHS-001');
     });
   });
 });

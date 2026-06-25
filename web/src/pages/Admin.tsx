@@ -231,15 +231,12 @@ function RefAdmin() {
     }
   }
 
-  // Générateur d'ID : calcule le prochain code de la catégorie courante (restaure le comportement V1).
+  // Générateur d'ID : règles exactes de la V1 (le libellé sert aux règles années/saisons/CU-CE).
   async function generateCode() {
     setErr('');
     if (!cat) return;
-    // Indice de préfixe : couleurs/tailles/options/années = numérique pur.
-    const numeric = ['colors', 'sizes', 'options', 'years', 'optionTypes'].includes(cat);
-    const qs = numeric ? '?prefix=' : '';
     try {
-      const r = await api<{ code: string }>('/api/ref/' + encodeURIComponent(cat) + '/next-code' + qs);
+      const r = await api<{ code: string }>('/api/ref/' + encodeURIComponent(cat) + '/next-code?name=' + encodeURIComponent(label));
       setCode(r.code);
     } catch (e) {
       setErr((e as Error).message);
