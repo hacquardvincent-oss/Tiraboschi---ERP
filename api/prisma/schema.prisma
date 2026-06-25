@@ -407,8 +407,9 @@ model FulfillmentTask {
 
 // ─── VENTES (POS) : socle d'encaissement fiable ───────────────────────────────
 enum SaleStatus {
-  PENDING
-  PAID
+  PENDING // créée, acompte non encaissé (lien envoyé)
+  AWAITING_BALANCE // acompte payé, solde dû (à la réception)
+  PAID // soldée (100 % ou solde encaissé)
   CANCELLED
   REFUNDED
 }
@@ -438,11 +439,21 @@ model Sale {
 
   status SaleStatus @default(PENDING)
 
+  // Plan de paiement (acompte / solde)
+  paymentPlan   String  @default("FULL") // FULL | DEPOSIT_50
+  depositCents  Int     @default(0) // montant de l'acompte (= total si FULL)
+  balanceCents  Int     @default(0) // reste à charge (0 si FULL)
+  depositPaidAt DateTime?
+  balancePaidAt DateTime?
+  documentType  String? // QUOTE | INVOICE — dernier document généré
+
   // Paiement
   stripeAccount         String? // FR | US
   stripePaymentIntentId String?
   stripeSessionId       String?
-  paymentUrl            String? // lien de paiement Stripe Checkout (hébergé)
+  depositSessionId      String? // session Checkout de l'acompte
+  balanceSessionId      String? // session Checkout du solde
+  paymentUrl            String? // dernier lien de paiement Stripe Checkout (hébergé)
   paidAt                DateTime?
 
   // Synchronisation Shopify (outbox)

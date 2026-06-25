@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/auth';
 import { createSale, markSalePaid, syncSale } from '../services/sales';
 import { calculateTax, createDraftOrder } from '../services/shopify';
+import { generateSaleDocument } from '../services/invoice';
 import {
   createPaymentLink,
   createTerminalConnectionToken,
@@ -70,6 +71,32 @@ salesRouter.get('/', async (_req, res) => {
   res.json(await prisma.sale.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }));
 });
 
+/** Alertes paiement : ventes en attente d'acompte (PENDING) ou de solde (AWAITING_BALANCE). */
+salesRouter.get('/alerts', async (_req, res) => {
+  const sales = await prisma.sale.findMany({
+    where: { status: { in: ['PENDING', 'AWAITING_BALANCE'] } },
+    orderBy: { createdAt: 'asc' },
+    take: 200,
+  });
+  const now = Date.now();
+  res.json(
+    sales.map((s) => ({
+      id: s.id,
+      reference: s.reference,
+      customerName: s.customerName,
+      currency: s.currency,
+      status: s.status,
+      totalCents: s.totalCents,
+      depositCents: s.depositCents,
+      balanceCents: s.balanceCents,
+      dueCents: s.status === 'AWAITING_BALANCE' ? s.balanceCents : s.depositCents,
+      kind: s.status === 'AWAITING_BALANCE' ? 'balance' : 'deposit',
+      ageDays: Math.floor((now - new Date(s.createdAt).getTime()) / 86400000),
+      createdAt: s.createdAt,
+    })),
+  );
+});
+
 salesRouter.post('/', async (req, res) => {
   const b = req.body ?? {};
   if (!Array.isArray(b.items) || b.items.length === 0) {
@@ -85,6 +112,7 @@ salesRouter.post('/', async (req, res) => {
       items: b.items,
       taxLines: b.taxLines,
       shippingCents: b.shippingCents,
+      paymentPlan: b.paymentPlan === 'DEPOSIT_50' ? 'DEPOSIT_50' : 'FULL',
       createdById: req.user?.sub,
     });
     res.status(201).json(sale);
@@ -99,6 +127,23 @@ salesRouter.post('/:id/pay', async (req, res) => {
     res.json(await markSalePaid(req.params.id, req.body ?? {}));
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+/** Devis ou facture PDF de la vente (aperçu/téléchargement). ?type=quote|invoice */
+salesRouter.get('/:id/document', async (req, res) => {
+  const type = req.query.type === 'invoice' ? 'INVOICE' : 'QUOTE';
+  try {
+    const sale = await prisma.sale.findUnique({ where: { id: req.params.id } });
+    if (!sale) return res.status(404).json({ error: 'Vente introuvable.' });
+    const pdf = await generateSaleDocument(sale, type);
+    await prisma.sale.update({ where: { id: sale.id }, data: { documentType: type } });
+    const fileLabel = type === 'INVOICE' ? 'facture' : 'devis';
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${fileLabel}-${sale.reference}.pdf"`);
+    res.send(pdf);
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
   }
 });
 
@@ -126,10 +171,11 @@ salesRouter.post('/:id/cancel', async (req, res) => {
 
 // ─── Encaissement Stripe (3b.2 lien / 3b.3 TPE S710) ─────────────────────────
 
-/** 3b.2 — Génère le lien de paiement Stripe Checkout (hébergé). */
+/** 3b.2 — Génère le lien de paiement Stripe Checkout (hébergé). `leg` = full | deposit | balance. */
 salesRouter.post('/:id/payment-link', async (req, res) => {
   try {
-    res.json(await createPaymentLink(req.params.id));
+    const leg = ['full', 'deposit', 'balance'].includes(req.body?.leg) ? req.body.leg : undefined;
+    res.json(await createPaymentLink(req.params.id, leg));
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }

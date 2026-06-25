@@ -31,11 +31,13 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.3",
+    "pdfkit": "^0.15.2",
     "prisma": "^6.19.3",
     "stripe": "^22.2.0",
     "typescript": "^6.0.3"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.17.6",
     "tsx": "^4.19.2",
     "vitest": "^4.1.8"
   }

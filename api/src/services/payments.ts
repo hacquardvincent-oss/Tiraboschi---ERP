@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { config } from '../config';
 import { prisma } from '../db/prisma';
-import { markSalePaid } from './sales';
+import { markSalePaid, markDepositPaid, markBalancePaid } from './sales';
 import type { SaleItem, SaleTaxLine } from './sales';
 import { cancelShopifyOrder } from './shopify';
 
@@ -83,30 +83,65 @@ function checkoutLineItems(
   return lines;
 }
 
-/** 3b.2 — Crée (ou réutilise) un lien de paiement Stripe Checkout hébergé pour la vente. */
-export async function createPaymentLink(saleId: string): Promise<{ url: string }> {
+export type PaymentLeg = 'full' | 'deposit' | 'balance';
+
+/** Détermine la jambe à encaisser par défaut selon le plan et l'état de la vente. */
+function defaultLeg(sale: { paymentPlan: string; depositPaidAt: Date | null }): PaymentLeg {
+  if (sale.paymentPlan !== 'DEPOSIT_50') return 'full';
+  return sale.depositPaidAt ? 'balance' : 'deposit';
+}
+
+/** Ligne Checkout unique pour une jambe acompte/solde (montant exact, libellé clair). */
+function legLine(currency: string, label: string, amountCents: number): CheckoutLine {
+  return { quantity: 1, price_data: { currency: currency.toLowerCase(), unit_amount: Math.round(amountCents), product_data: { name: label } } };
+}
+
+/**
+ * 3b.2 — Crée un lien de paiement Stripe Checkout hébergé pour la vente.
+ * Jambe `full` (paiement 100 %), `deposit` (acompte 50 %) ou `balance` (solde 50 %).
+ * Réutilisable pour la relance : on régénère un lien sans re-saisir le formulaire POS.
+ */
+export async function createPaymentLink(saleId: string, leg?: PaymentLeg): Promise<{ url: string; leg: PaymentLeg }> {
   const sale = await prisma.sale.findUnique({ where: { id: saleId } });
   if (!sale) throw new Error('Vente introuvable.');
   if (sale.status === 'PAID') throw new Error('Vente déjà payée.');
+  const which: PaymentLeg = leg ?? defaultLeg(sale);
+  if (which === 'balance' && !sale.depositPaidAt) throw new Error("L'acompte n'a pas encore été encaissé.");
+  if (which === 'balance' && sale.balanceCents <= 0) throw new Error('Aucun solde à encaisser.');
   const market = marketOf(sale);
   const stripe = stripeFor(market);
 
+  const ref = sale.reference;
+  const line_items =
+    which === 'full'
+      ? checkoutLineItems(sale)
+      : which === 'deposit'
+        ? [legLine(sale.currency, `Acompte (50%) — ${ref}`, sale.depositCents)]
+        : [legLine(sale.currency, `Solde (50%) — ${ref}`, sale.balanceCents)];
+  const metadata = { saleId: sale.id, reference: ref, leg: which };
+
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
-    line_items: checkoutLineItems(sale),
+    line_items,
     ...(sale.customerEmail ? { customer_email: sale.customerEmail } : {}),
-    metadata: { saleId: sale.id, reference: sale.reference },
-    payment_intent_data: { metadata: { saleId: sale.id, reference: sale.reference } },
+    metadata,
+    payment_intent_data: { metadata },
     success_url: `${config.publicUrl}/?paid=${sale.id}`,
     cancel_url: `${config.publicUrl}/?cancelled=${sale.id}`,
   });
+  if (!session.url) throw new Error('Stripe n’a pas renvoyé d’URL de paiement.');
 
   await prisma.sale.update({
     where: { id: sale.id },
-    data: { stripeAccount: market, stripeSessionId: session.id, paymentUrl: session.url ?? undefined },
+    data: {
+      stripeAccount: market,
+      paymentUrl: session.url,
+      ...(which === 'deposit' ? { depositSessionId: session.id } : {}),
+      ...(which === 'balance' ? { balanceSessionId: session.id } : {}),
+      ...(which === 'full' ? { stripeSessionId: session.id } : {}),
+    },
   });
-  if (!session.url) throw new Error('Stripe n’a pas renvoyé d’URL de paiement.');
-  return { url: session.url };
+  return { url: session.url, leg: which };
 }
 
 /** 3b.3 — Jeton de connexion Terminal (le front S710 s'y connecte) + infos compte. */
@@ -186,10 +221,20 @@ export async function handleStripeWebhook(
       metadata: Record<string, string> | null;
     };
     if (s.payment_status === 'paid') {
-      await payByMetadata(s.metadata?.saleId, market, {
-        stripeSessionId: s.id,
-        stripePaymentIntentId: typeof s.payment_intent === 'string' ? s.payment_intent : undefined,
-      });
+      const saleId = s.metadata?.saleId;
+      const leg = s.metadata?.leg;
+      if (saleId) {
+        if (leg === 'deposit') {
+          await markDepositPaid(saleId, { stripeAccount: market, depositSessionId: s.id });
+        } else if (leg === 'balance') {
+          await markBalancePaid(saleId, { stripeAccount: market, balanceSessionId: s.id });
+        } else {
+          await payByMetadata(saleId, market, {
+            stripeSessionId: s.id,
+            stripePaymentIntentId: typeof s.payment_intent === 'string' ? s.payment_intent : undefined,
+          });
+        }
+      }
     }
   } else if (event.type === 'payment_intent.succeeded') {
     const pi = event.data.object as { id: string; metadata: Record<string, string> | null };

@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma';
-import { createRecoveryOrder } from './shopify';
+import { createRecoveryOrder, markShopifyOrderPaid } from './shopify';
 import { orchestrateSale } from './fulfillment';
 
 export interface SaleItem {
@@ -31,6 +31,8 @@ export interface SaleCustomer {
   note?: string;
 }
 
+export type PaymentPlan = 'FULL' | 'DEPOSIT_50';
+
 export interface CreateSaleInput {
   market: 'FR' | 'US';
   currency: string;
@@ -40,7 +42,17 @@ export interface CreateSaleInput {
   items: SaleItem[];
   taxLines?: SaleTaxLine[];
   shippingCents?: number;
+  paymentPlan?: PaymentPlan;
   createdById?: string;
+}
+
+/** Acompte/solde selon le plan : 50/50 (acompte = moitié arrondie) ou FULL (acompte = total). */
+export function splitPayment(totalCents: number, plan: PaymentPlan): { depositCents: number; balanceCents: number } {
+  if (plan === 'DEPOSIT_50') {
+    const depositCents = Math.round(totalCents / 2);
+    return { depositCents, balanceCents: totalCents - depositCents };
+  }
+  return { depositCents: totalCents, balanceCents: 0 };
 }
 
 const cents = (n: number) => Math.round(n);
@@ -57,6 +69,8 @@ export async function createSale(input: CreateSaleInput) {
   const taxCents = (input.taxLines ?? []).reduce((s, t) => s + cents(t.amountCents), 0);
   const shippingCents = cents(input.shippingCents ?? 0);
   const totalCents = subtotalCents + taxCents + shippingCents;
+  const plan: PaymentPlan = input.paymentPlan === 'DEPOSIT_50' ? 'DEPOSIT_50' : 'FULL';
+  const { depositCents, balanceCents } = splitPayment(totalCents, plan);
   return prisma.sale.create({
     data: {
       reference: 'SALE-' + Date.now(),
@@ -71,6 +85,9 @@ export async function createSale(input: CreateSaleInput) {
       taxCents,
       shippingCents,
       totalCents,
+      paymentPlan: plan,
+      depositCents,
+      balanceCents,
       createdById: input.createdById,
     },
   });
@@ -84,10 +101,51 @@ export async function markSalePaid(
   const existing = await prisma.sale.findUnique({ where: { id: saleId } });
   await prisma.sale.update({
     where: { id: saleId },
-    data: { status: 'PAID', paidAt: existing?.paidAt ?? new Date(), ...payment },
+    data: { status: 'PAID', paidAt: existing?.paidAt ?? new Date(), balancePaidAt: existing?.balancePaidAt ?? new Date(), ...payment },
   });
   await syncSale(saleId).catch(() => {});
   await orchestrateSale(saleId).catch(() => {});
+  return prisma.sale.findUnique({ where: { id: saleId } });
+}
+
+/**
+ * Acompte (50/50) encaissé : la vente passe « en attente du solde », la commande Shopify
+ * est créée en « partiellement payée » (montant acompte) et la PRODUCTION démarre.
+ */
+export async function markDepositPaid(
+  saleId: string,
+  payment: { stripeAccount?: string; depositSessionId?: string } = {},
+) {
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+  if (!sale) return null;
+  if (sale.depositPaidAt) return sale; // idempotent
+  await prisma.sale.update({
+    where: { id: saleId },
+    data: { status: 'AWAITING_BALANCE', depositPaidAt: new Date(), ...payment },
+  });
+  await syncSale(saleId).catch(() => {}); // crée la commande Shopify partiellement payée
+  await orchestrateSale(saleId).catch(() => {}); // lance la production dès l'acompte
+  return prisma.sale.findUnique({ where: { id: saleId } });
+}
+
+/** Solde encaissé : la vente passe « payée » et la commande Shopify est marquée payée. */
+export async function markBalancePaid(
+  saleId: string,
+  payment: { stripeAccount?: string; balanceSessionId?: string } = {},
+) {
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+  if (!sale) return null;
+  if (sale.status === 'PAID') return sale; // idempotent
+  await prisma.sale.update({
+    where: { id: saleId },
+    data: { status: 'PAID', balancePaidAt: new Date(), paidAt: sale.paidAt ?? new Date(), ...payment },
+  });
+  if (sale.shopifyOrderId) {
+    await markShopifyOrderPaid(sale.shopifyOrderId).catch(() => {});
+  } else {
+    await syncSale(saleId).catch(() => {});
+  }
+  await orchestrateSale(saleId).catch(() => {}); // idempotent (déjà fait à l'acompte)
   return prisma.sale.findUnique({ where: { id: saleId } });
 }
 
@@ -100,7 +158,9 @@ function splitName(name?: string | null): { firstName?: string; lastName?: strin
 /** Crée la commande Shopify pour une vente payée (idempotent + statut). */
 export async function syncSale(saleId: string): Promise<void> {
   const sale = await prisma.sale.findUnique({ where: { id: saleId } });
-  if (!sale || sale.status !== 'PAID') return;
+  if (!sale || (sale.status !== 'PAID' && sale.status !== 'AWAITING_BALANCE')) return;
+  // Acompte payé (50/50) → commande Shopify « partiellement payée » du montant de l'acompte.
+  const partial = sale.status === 'AWAITING_BALANCE';
   if (sale.shopifyOrderId) {
     if (sale.syncStatus !== 'SYNCED') {
       await prisma.sale.update({ where: { id: saleId }, data: { syncStatus: 'SYNCED' } });
@@ -140,10 +200,11 @@ export async function syncSale(saleId: string): Promise<void> {
         price: toAmount(i.priceCents),
       })),
       taxLines: taxLines.map((t) => ({ title: t.title, rate: t.rate, price: toAmount(t.amountCents) })),
-      stripeId: sale.stripePaymentIntentId ?? sale.stripeSessionId ?? undefined,
-      processedAt: (sale.paidAt ?? new Date()).toISOString(),
-      tags: ['POS', sale.market],
-      note: `Vente POS ${sale.reference}${sale.stripeSessionId ? ' (lien de paiement)' : ''}`,
+      stripeId: sale.stripePaymentIntentId ?? sale.depositSessionId ?? sale.stripeSessionId ?? undefined,
+      processedAt: (sale.depositPaidAt ?? sale.paidAt ?? new Date()).toISOString(),
+      tags: partial ? ['POS', sale.market, 'Acompte 50%'] : ['POS', sale.market],
+      note: `Vente POS ${sale.reference}${partial ? ` — acompte ${toAmount(sale.depositCents)} ${sale.currency}, solde ${toAmount(sale.balanceCents)} ${sale.currency} à la réception` : ''}`,
+      ...(partial ? { financialStatus: 'PARTIALLY_PAID' as const, paidAmount: toAmount(sale.depositCents) } : {}),
     });
     const errs = res.orderCreate.userErrors;
     if (errs.length > 0) throw new Error(errs.map((e) => e.message).join(', '));
@@ -173,7 +234,7 @@ export async function syncSale(saleId: string): Promise<void> {
 export async function processPendingSales(): Promise<void> {
   const pending = await prisma.sale.findMany({
     where: {
-      status: 'PAID',
+      status: { in: ['PAID', 'AWAITING_BALANCE'] },
       shopifyOrderId: null,
       syncStatus: { in: ['PENDING', 'FAILED'] },
       syncAttempts: { lt: 6 },

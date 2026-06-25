@@ -21,7 +21,8 @@ async function pickWorkshop(modelCode: string | null): Promise<string | null> {
  */
 export async function orchestrateSale(saleId: string): Promise<void> {
   const sale = await prisma.sale.findUnique({ where: { id: saleId } });
-  if (!sale || sale.status !== 'PAID') return;
+  // Production lancée dès l'acompte (AWAITING_BALANCE) ou au paiement complet (PAID).
+  if (!sale || (sale.status !== 'PAID' && sale.status !== 'AWAITING_BALANCE')) return;
   const ref = sale.shopifyOrderName ?? sale.reference;
 
   const [poCount, ftCount] = await Promise.all([

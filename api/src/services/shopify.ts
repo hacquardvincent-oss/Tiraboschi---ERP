@@ -122,6 +122,10 @@ export interface RecoveryOrderInput {
   processedAt?: string;
   tags?: string[];
   note?: string;
+  /** Statut financier (défaut PAID). PARTIALLY_PAID pour une commande avec acompte. */
+  financialStatus?: 'PAID' | 'PARTIALLY_PAID';
+  /** Montant déjà encaissé (acompte), dans la devise de la commande, ex. "15514.69". */
+  paidAmount?: string;
 }
 
 interface OrderCreateResult {
@@ -149,9 +153,12 @@ export async function createRecoveryOrder(input: RecoveryOrderInput): Promise<Or
 
   const order: Record<string, unknown> = {
     currency,
-    financialStatus: 'PAID',
+    financialStatus: input.financialStatus ?? 'PAID',
     taxesIncluded: false,
     tags: input.tags ?? ['POS', 'Récupération'],
+    ...(input.paidAmount
+      ? { transactions: [{ kind: 'SALE', status: 'SUCCESS', amountSet: money(input.paidAmount) }] }
+      : {}),
     lineItems: input.lineItems.map((li) => ({
       title: li.title,
       ...(li.sku ? { sku: li.sku } : {}),
@@ -347,6 +354,27 @@ export async function cancelShopifyOrder(orderId: string, restock = true): Promi
     restock,
   });
   const errs = res.orderCancel?.userErrors ?? [];
+  if (errs.length > 0) throw new Error(errs.map((e) => e.message).join(', '));
+}
+
+// ─── Marque une commande Shopify comme payée (encaissement du solde) ──────────
+interface OrderMarkPaidResult {
+  orderMarkAsPaid: {
+    order: { id: string; displayFinancialStatus: string } | null;
+    userErrors: { message: string }[];
+  } | null;
+}
+/** Passe une commande Shopify (partiellement payée) à « payée » lors de l'encaissement du solde. */
+export async function markShopifyOrderPaid(orderId: string): Promise<void> {
+  const mutation = `
+    mutation OrderMarkPaid($input: OrderMarkAsPaidInput!) {
+      orderMarkAsPaid(input: $input) {
+        order { id displayFinancialStatus }
+        userErrors { message }
+      }
+    }`;
+  const res = await shopifyGraphQL<OrderMarkPaidResult>(mutation, { input: { id: orderId } });
+  const errs = res.orderMarkAsPaid?.userErrors ?? [];
   if (errs.length > 0) throw new Error(errs.map((e) => e.message).join(', '));
 }
 
