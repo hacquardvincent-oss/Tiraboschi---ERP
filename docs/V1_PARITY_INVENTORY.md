@@ -175,8 +175,8 @@ reporting opt-in emails). Aucun écart bloquant ; tous documentés ci-dessous.
 ### Module — Taxes (US Sales Tax)
 
 - [ ] Calcul taxe via création + suppression d'un draft order Shopify — V1: server.js:752-926 — V2: ✅ (sur-ensemble) — `services/shopify.ts:381-423` utilise `draftOrderCalculate` (calcul sans persister, pas de création/suppression).
-- [ ] Cartographie ZIP→État US (zipToState, 51 plages) — V1: server.js:757-812 — V2: ❌ — non porté : la V2 envoie directement `provinceCode` saisi (`routes/sales.ts:34`, `services/shopify.ts:396`). Si la V2 doit déduire l'État depuis le seul ZIP, c'est manquant.
-- [ ] Contournement conversion devise Shopify Markets (conversionRate) — V1: server.js:879-912 — V2: 🟡 — la V2 force `presentmentCurrencyCode` sur le draftOrderCalculate (`services/shopify.ts:393`) ; le re-scaling explicite par `subtotal/expectedSubtotal` n'est plus fait (approche différente, à valider en prod USD).
+- [x] Cartographie ZIP→État US (zipToState, 51 plages) — V1: server.js:757-812 — V2: ✅ (DÉCISION : non repris volontairement) — **Shopify = seule source de vérité de la Sales Tax**. La V2 transmet l'adresse complète (`countryCode`/`provinceCode`/`zip`/`city`) à `draftOrderCalculate` (`services/shopify.ts:394-400`) et Shopify calcule les taux par État/ville/comté en temps réel (cf. facture cible : NY State + NYC + Metropolitan). On NE fige PAS de table ZIP→État (vieillirait mal).
+- [x] Contournement conversion devise Shopify Markets (conversionRate) — V1: server.js:879-912 — V2: ✅ (DÉCISION : NE PAS bypasser Markets) — la V2 envoie `presentmentCurrencyCode` et utilise les montants Shopify **tels quels** (`services/shopify.ts:393,414-421`). Aucun re-scaling. Reste uniquement une **vérif de config boutique** (prix USD cohérents) — pas de code à écrire.
 - [ ] Dé-duplication des lignes de taxe identiques — V1: server.js:889-905, app.js:2658-2665 — V2: 🟡 — lignes renvoyées telles quelles par Shopify (`services/shopify.ts:417`) ; dé-dup explicite à vérifier.
 - [ ] shipping forcé à 0 mais requires_shipping=true pour taxer à destination — V1: server.js:821-854 — V2: ✅ — `requiresShipping:true, taxable:true` (`services/shopify.ts:404-406`).
 
@@ -232,8 +232,7 @@ Top écarts ❌ / 🟡 à arbitrer pour garantir la parité métier :
 1. **🟡/❌ Consentement marketing RGPD** — cases email/SMS captées (`Pos.tsx:498-502`) mais jamais poussées vers Shopify (`services/shopify.ts:559-589`). À implémenter (`emailMarketingConsent`/`smsMarketingConsent`). NB : déjà cassé en V1.
 2. **❌ Encart workaround in-app-browser sur `/pay/:id`** (WhatsApp/Instagram « Ouvrir dans Safari ») — V1: server.js:344-345,375-389 ; absent de `routes/pay.ts`. Risque réel : clients ouvrant le lien depuis WhatsApp.
 3. **🟡 Wizard POS 5 étapes + double mode prix Sur place/Expédié DDP par article** — V1: app.js:877-1002 ; V2 fait 3 niveaux + mode au checkout (`Configurator.tsx`, `Pos.tsx:572-579`). Vérifier que l'UX vendeur reste équivalente.
-4. **❌ Cartographie ZIP→État US (zipToState)** — V1: server.js:757-812 ; V2 exige `provinceCode` saisi. Si on veut taxer à partir du seul ZIP, à reporter.
-5. **🟡 Contournement conversion Shopify Markets** — V1: server.js:879-912 ; V2 force `presentmentCurrencyCode` sans re-scaling. À valider en conditions réelles USD pour éviter des écarts de taxe.
+4. **✅ DÉCISION — ZIP→État & bypass Markets : NON repris.** Shopify est la seule source de vérité de la Sales Tax (taux par État/ville/comté en temps réel). La V2 lui transmet l'adresse complète et utilise ses montants tels quels. On ne fige pas de table ZIP→État et on ne bypass pas Markets. Seule action : vérifier la config devise/Markets de la boutique en USD réel (pas de code).
 6. **❌ Champ commission vendeur** — V1: index.html:709 ; absent du modèle `User` V2. À ajouter si la paie commission est utilisée.
 7. **🟡 `/pay/:id` bilingue (EN/FR selon session)** — V1: server.js:336-346 ; V2 FR uniquement (`routes/pay.ts`).
 8. **🟡 KPI « emails opt-in »** non calculé — V1: server.js:697-699 ; absent de `getReports` (`services/shopify.ts:230-286`).
