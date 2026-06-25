@@ -4,7 +4,7 @@ import { useToast } from '../toast';
 import { useI18n } from '../i18n';
 import { Thumb, Button } from '../components/ui';
 import { Configurator } from '../components/Configurator';
-import { api } from '../lib/api';
+import { api, apiDownload } from '../lib/api';
 import { useCurrency } from '../store';
 import { chargeOnReader } from '../lib/terminal';
 
@@ -73,6 +73,7 @@ export function Pos() {
   };
   const [usTaxRate] = useState('8'); // estimation d'attente (taxe exacte calculée par Shopify à la validation)
   const [ddp, setDdp] = useState(false);
+  const [plan, setPlan] = useState<'FULL' | 'DEPOSIT_50'>('FULL'); // 100 % ou acompte 50/50
   const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
   const toast = useToast();
   const { t, lang } = useI18n();
@@ -317,6 +318,7 @@ export function Pos() {
         items,
         taxLines,
         shippingCents: ddp ? Math.round(ship * 100) : 0,
+        paymentPlan: plan,
       },
     });
     const s: SavedSale = { id: sale.id, reference: sale.reference, market };
@@ -407,6 +409,7 @@ export function Pos() {
     setCart([]);
     setCustomer(emptyCustomer);
     setDdp(false);
+    setPlan('FULL');
     setSaved(null);
     setPayLink('');
     setTpeStatus('');
@@ -579,6 +582,16 @@ export function Pos() {
           )}
         </div>
 
+        {/* Plan de paiement : 100 % ou acompte 50 / 50 */}
+        <div className="flex items-center gap-2 mt-3 text-sm flex-wrap">
+          <span className="text-white/40 text-xs">{t('Paiement')} :</span>
+          <button className={'px-3 py-1.5 rounded border ' + (plan === 'FULL' ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setPlan('FULL')}>{t('100 % maintenant')}</button>
+          <button className={'px-3 py-1.5 rounded border ' + (plan === 'DEPOSIT_50' ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setPlan('DEPOSIT_50')}>{t('Acompte 50 / 50')}</button>
+          {plan === 'DEPOSIT_50' && (
+            <span className="text-xs text-white/50">{t('Acompte')} {fmt(total / 2)} · {t('Solde')} {fmt(total - total / 2)}</span>
+          )}
+        </div>
+
         <div className="mt-3 text-sm space-y-1">
           <Row label={t('Sous-total HT')} value={fmt(subtotal)} />
           {ddp && <Row label={t('Frais de port (DDP)')} value={fmt(ship)} />}
@@ -628,7 +641,9 @@ export function Pos() {
             </div>
           )}
           {saved && (
-            <div className="flex items-center gap-4 mt-3">
+            <div className="flex items-center gap-4 mt-3 flex-wrap">
+              <button className="text-azure text-sm" onClick={() => apiDownload(`/api/pos/sales/${saved.id}/document?type=quote`, `devis-${saved.reference}.pdf`).catch((e) => toast((e as Error).message, 'error'))}>📄 {t('Devis')}</button>
+              <button className="text-azure text-sm" onClick={() => apiDownload(`/api/pos/sales/${saved.id}/document?type=invoice`, `facture-${saved.reference}.pdf`).catch((e) => toast((e as Error).message, 'error'))}>📄 {t('Facture')}</button>
               <a className="text-azure text-sm" href={'/receipt/' + saved.id} target="_blank" rel="noreferrer">{t('Reçu')} ↗</a>
               <button className="text-gold text-sm" onClick={newSale}>{t('+ Nouvelle vente')}</button>
             </div>
