@@ -9,6 +9,10 @@ const GOLD = '#C9A86A';
 const INK = '#141312';
 const MUTE = '#7A7873';
 
+// Identité légale de la maison (mentions automatiques sur tous les devis/factures).
+const SIREN = '944886985';
+const VAT = 'FR91944886985';
+
 const T: Record<Lang, Record<string, string>> = {
   fr: {
     quote: 'DEVIS', invoice: 'FACTURE D’ACOMPTE', no: 'N°', date: 'Date', order: 'Commande', currency: 'Devise',
@@ -57,6 +61,7 @@ export function generateSaleDocument(sale: Sale, type: DocType): Promise<Buffer>
     doc.fillColor(GOLD).font('Helvetica').fontSize(8).text('PARIS — SINCE 1904', L, 78, { characterSpacing: 2 });
     doc.fillColor(MUTE).fontSize(8).text('96 Avenue de Clichy · 75017 Paris · France', L, 94);
     doc.text('+33 7 69 08 30 08 · laurene.mauro@boschi-paris.com', L, 105);
+    doc.text(`SIREN ${SIREN} · ${lang === 'fr' ? 'TVA' : 'VAT'} ${VAT}`, L, 116);
 
     const title = type === 'INVOICE' ? t.invoice : t.quote;
     doc.fillColor(INK).font('Helvetica').fontSize(16).text(title, L, 50, { width: W, align: 'right', characterSpacing: 1 });
@@ -150,8 +155,12 @@ export function generateSaleDocument(sale: Sale, type: DocType): Promise<Buffer>
       y += 44;
     }
 
-    // ─── Pied de page ───
-    doc.fillColor(MUTE).font('Helvetica').fontSize(8).text(
+    // ─── Pied de page (mentions légales) ───
+    doc.fillColor(MUTE).font('Helvetica').fontSize(7.5).text(
+      `SIREN ${SIREN} · ${lang === 'fr' ? 'TVA intracommunautaire' : 'EU VAT'} ${VAT}`,
+      L, doc.page.height - 74, { width: W, align: 'center' },
+    );
+    doc.fontSize(8).text(
       `TIRABOSCHI — 96 Avenue de Clichy · 75017 Paris · France · ${t.thanks}`,
       L, doc.page.height - 60, { width: W, align: 'center' },
     );
