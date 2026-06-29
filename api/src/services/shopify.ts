@@ -1,4 +1,5 @@
 import { config } from '../config';
+import { LEGAL } from '../legal';
 
 /**
  * Service Shopify (V2).
@@ -171,7 +172,11 @@ export async function createRecoveryOrder(input: RecoveryOrderInput): Promise<Or
       ...(t.rate !== undefined ? { rate: t.rate } : {}),
       priceSet: money(t.price),
     })),
-    customAttributes: input.stripeId ? [{ key: 'Stripe', value: input.stripeId }] : [],
+    customAttributes: [
+      { key: 'SIREN', value: LEGAL.siren },
+      { key: 'TVA intracommunautaire', value: LEGAL.vat },
+      ...(input.stripeId ? [{ key: 'Stripe', value: input.stripeId }] : []),
+    ],
   };
   if (input.note) order.note = input.note;
   if (input.processedAt) order.processedAt = input.processedAt;

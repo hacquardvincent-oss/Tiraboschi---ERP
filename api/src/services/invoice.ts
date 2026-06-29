@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { Sale } from '@prisma/client';
 import type { SaleItem, SaleTaxLine, SaleCustomer } from './sales';
+import { LEGAL } from '../legal';
 
 export type DocType = 'QUOTE' | 'INVOICE';
 type Lang = 'fr' | 'en';
@@ -10,8 +11,8 @@ const INK = '#141312';
 const MUTE = '#7A7873';
 
 // Identité légale de la maison (mentions automatiques sur tous les devis/factures).
-const SIREN = '944886985';
-const VAT = 'FR91944886985';
+const SIREN = LEGAL.siren;
+const VAT = LEGAL.vat;
 
 const T: Record<Lang, Record<string, string>> = {
   fr: {
