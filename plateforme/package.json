@@ -1,0 +1,20 @@
+{
+  "name": "tiraboschi-plateforme",
+  "version": "0.2.0",
+  "description": "Écosystème Tiraboschi — Plateforme (POS/ERP + devis + CRM + SRM)",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "node --test \"tests/*.test.js\"",
+    "migrate": "node scripts/migrate_json_to_mongo.js",
+    "seed:referentiel": "node scripts/seed_referentiel.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.22.2",
+    "mongodb": "^6.21.0"
+  },
+  "type": "module"
+}
