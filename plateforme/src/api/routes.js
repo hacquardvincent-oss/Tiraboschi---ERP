@@ -30,8 +30,12 @@ export function monterRoutes(app, store, { traiterApresEcriture = true } = {}) {
 
   /* ── Référentiel (consommé par le configurateur, déjà filtré) ── */
   api.get('/referentiel', attraper(async (req, res) => {
-    const cliente = req.query.cliente
-      ? await store.col('clients').trouverUn({ _id: req.query.cliente }) : null;
+    /* ?cliente=<id> : vue filtrée servie au configurateur (le front du site).
+       ?statut=<n>  : vue back-office — voir comme un cercle donné (4 = tout). */
+    const cliente = req.query.statut !== undefined
+      ? { societe: { statut: Number(req.query.statut) } }
+      : req.query.cliente
+        ? await store.col('clients').trouverUn({ _id: req.query.cliente }) : null;
     res.json(await referentielPour(store, cliente));
   }));
 

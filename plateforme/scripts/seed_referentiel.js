@@ -6,10 +6,49 @@
 
 import { ouvrirStore } from '../src/data/store.js';
 
+/* Chaque modèle liste SES ajustements ; chaque option d'un ajustement porte
+   sa photo d'état (l'Olympe AVEC et SANS pochon) — c'est ce qui permet au
+   back-office de les visualiser et au configurateur de montrer l'état choisi.
+   `photo: null` = cliché à fournir (le back-office le signale). */
+const CDN = 'https://cdn.shopify.com/s/files/1/0927/5890/1079/files/';
 export const MODELES = [
-  { _id: 'colette', nom: 'Colette', code_erp: 'CO', base: 3200, ordre: 1 },
-  { _id: 'olympe', nom: 'Olympe', code_erp: 'OL', base: 2900, ordre: 2 },
-  { _id: 'rafael', nom: 'Rafaël', code_erp: 'RA', base: 1900, ordre: 3 },
+  { _id: 'colette', nom: 'Colette', code_erp: 'CO', base: 3200, ordre: 1,
+    packshot: CDN + 'BOSCHI0633.jpg?v=1769462827',
+    ajustements: [
+      { k: 'ext', nom: 'Cuir extérieur', type: 'cuir' },
+      { k: 'v', nom: 'Le V', type: 'cuir' },
+      { k: 'anse', nom: "Cuir de l'anse", type: 'cuir' },
+      { k: 'ferrures', nom: 'Ferrures', type: 'liste', ref: 'ref_ferrures' },
+      { k: 'pieds', nom: 'Pieds', type: 'liste', options: [
+        { id: 'oui', nom: 'Cinq clous de laiton', supplement: 180, photo: null },
+        { id: 'non', nom: 'Sans pieds', supplement: 0, photo: null },
+      ]},
+    ]},
+  { _id: 'olympe', nom: 'Olympe', code_erp: 'OL', base: 2900, ordre: 2,
+    packshot: CDN + 'BOSCHI0757.jpg?v=1769441367',
+    ajustements: [
+      { k: 'ext', nom: 'Cuir extérieur', type: 'cuir' },
+      { k: 'pochon', nom: 'Le pochon', type: 'liste', options: [
+        { id: 'avec', nom: 'Avec pochon', supplement: 0,
+          photo: CDN + 'BOSCHI0757.jpg?v=1769441367' },
+        { id: 'sans', nom: 'Sans pochon', supplement: 0, photo: null },
+      ]},
+      { k: 'ferrures', nom: 'Ferrures', type: 'liste', ref: 'ref_ferrures' },
+    ]},
+  { _id: 'rafael', nom: 'Rafaël', code_erp: 'RA', base: 1900, ordre: 3,
+    packshot: CDN + 'BOSCHI0774_85f74e95-56cc-4478-aba9-5c523a543565.jpg?v=1769440532',
+    ajustements: [
+      { k: 'ext', nom: 'Cuir extérieur', type: 'cuir' },
+      { k: 'passepoil', nom: 'Passepoil', type: 'liste', options: [
+        { id: 'framboise', nom: 'Framboise', supplement: 0, photo: null },
+        { id: 'noir', nom: 'Noir', supplement: 0, photo: null },
+      ]},
+      { k: 'bandouliere', nom: 'Bandoulière', type: 'liste', options: [
+        { id: 'avec', nom: 'Avec bandoulière', supplement: 0, photo: null },
+        { id: 'sans', nom: 'Pochette nue', supplement: 0, photo: null },
+      ]},
+      { k: 'ferrures', nom: 'Ferrures', type: 'liste', ref: 'ref_ferrures' },
+    ]},
 ];
 
 export const MATIERES = [

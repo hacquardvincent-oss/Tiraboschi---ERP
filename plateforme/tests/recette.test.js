@@ -22,6 +22,18 @@ before(async () => {
 });
 after(() => serveur.close());
 
+test('le référentiel expose les ajustements par modèle, avec photos d\'état', async () => {
+  const ref = (await api('/api/referentiel')).corps;
+  const olympe = ref.modeles.find(m => m._id === 'olympe');
+  const pochon = olympe.ajustements.find(a => a.k === 'pochon');
+  assert.equal(pochon.options.length, 2);
+  assert.ok(pochon.options.find(o => o.id === 'avec').photo, 'l\'état « avec pochon » a sa photo');
+  assert.equal(pochon.options.find(o => o.id === 'sans').photo, null, '« sans pochon » : cliché à fournir');
+  const page = await api('/referentiel.html');
+  assert.equal(page.status, 200);
+  assert.match(page.corps, /Référentiel/);
+});
+
 test('référentiel filtré : Claire ne voit pas les exotiques, Hélène si', async () => {
   const claire = (await api('/api/referentiel?cliente=cli_claire')).corps;
   const helene = (await api('/api/referentiel?cliente=cli_helene')).corps;

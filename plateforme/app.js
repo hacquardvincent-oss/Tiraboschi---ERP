@@ -1,6 +1,8 @@
 /* Bootstrap de la Plateforme — mince par principe : env, store, routes, workers. */
 
 import express from 'express';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ouvrirStore } from './src/data/store.js';
 import { monterRoutes } from './src/api/routes.js';
 import { traiterJournal } from './src/data/journal.js';
@@ -13,6 +15,7 @@ export async function creerApp(options = {}) {
     ok: true, data: store.mode, organes: process.env.ORGANES_MODE ?? 'simulation',
   }));
   monterRoutes(app, store, options);
+  app.use(express.static(join(dirname(fileURLToPath(import.meta.url)), 'public')));
   return { app, store };
 }
 
