@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tiraboschi — Maquette de l'écosystème</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   MAQUETTE FONCTIONNELLE — valider les modules ENTRE EUX.
+   Tout est simulé en mémoire ; le journal d'événements est le
+   personnage principal : chaque geste métier y écrit, les modules
+   ne communiquent que par lui (règle n°2 de la structure).
+   Deux chartes assumées : l'univers maison (cliente, clair, serif)
+   et The Blue Sole (back-office, noir + azur) — deux mondes, un cerveau.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --noir:#0a0a0a;--ecru:#efeae3;--blanc:#fff;
+  --bo-fond:#0d1117;--bo-carte:#161c26;--bo-bord:#232b38;--azur:#00d4ff;
+  --ok:#3fb950;--warn:#d29922;--rouge:#f85149;
+  --e:cubic-bezier(.16,1,.3,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#07090c;color:#dde3ea;
+  height:100vh;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+/* ── Bandeau ── */
+header{flex:0 0 auto;display:flex;align-items:center;gap:18px;
+  padding:10px 18px;background:#0a0d12;border-bottom:1px solid var(--bo-bord)}
+header .marque{font-family:'Playfair Display',serif;letter-spacing:.34em;font-size:13px}
+header .ss{font-size:10px;color:#7d8590;letter-spacing:.08em}
+.roles{display:flex;gap:4px;margin-left:auto}
+.role{padding:7px 14px;font-size:11px;letter-spacing:.06em;border:1px solid var(--bo-bord);
+  color:#9aa4b2;transition:.25s}
+.role.on{border-color:var(--azur);color:var(--azur);background:rgba(0,212,255,.06)}
+.horloge{font-size:11px;color:#7d8590;border:1px solid var(--bo-bord);padding:7px 10px}
+.horloge b{color:#dde3ea}
+.horloge button{color:var(--azur);margin-left:8px;font-size:11px}
+
+/* ── Corps : scène + colonne journal ── */
+main{flex:1;display:grid;grid-template-columns:1fr 380px;min-height:0}
+.scene{position:relative;min-height:0;overflow:hidden}
+.pan{position:absolute;inset:0;overflow:auto;display:none}
+.pan.on{display:block}
+
+/* ── Colonne droite : journal + organes ── */
+aside{border-left:1px solid var(--bo-bord);background:#0a0d12;display:flex;
+  flex-direction:column;min-height:0}
+aside h2{font-size:10px;letter-spacing:.22em;color:#7d8590;padding:12px 14px 8px}
+#organes{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px 12px}
+.org{border:1px solid var(--bo-bord);background:var(--bo-carte);padding:9px 11px;min-height:64px}
+.org h3{font-size:10px;letter-spacing:.1em;color:#9aa4b2;display:flex;justify-content:space-between}
+.org h3 i{font-style:normal;color:var(--azur)}
+.org p{font-size:10px;color:#7d8590;margin-top:6px;line-height:1.5}
+.org p b{color:#dde3ea;font-weight:500}
+.org.pulse{animation:pulse 1s var(--e)}
+@keyframes pulse{0%{border-color:var(--azur);box-shadow:0 0 0 3px rgba(0,212,255,.15)}100%{}}
+#journal{flex:1;min-height:0;overflow:auto;padding:0 14px 14px;display:flex;
+  flex-direction:column;gap:6px}
+.evt{border-left:2px solid var(--azur);background:var(--bo-carte);padding:8px 10px;
+  animation:arrive .5s var(--e)}
+.evt.muet{border-left-color:#3a4453}
+@keyframes arrive{from{opacity:0;transform:translateY(-6px)}to{opacity:1}}
+.evt .t{font-size:11px;color:var(--azur);font-weight:600;letter-spacing:.02em}
+.evt.muet .t{color:#9aa4b2}
+.evt .d{font-size:10px;color:#9aa4b2;margin-top:3px;line-height:1.5}
+.evt .q{font-size:9px;color:#586170;margin-top:4px}
+.evt .q b{color:#7d8590;font-weight:500}
+
+/* ═══ UNIVERS MAISON (panneaux clientes) ═══ */
+.maison{background:var(--ecru);color:var(--noir);font-family:'Playfair Display',Georgia,serif;
+  min-height:100%;padding:34px clamp(20px,5vw,70px) 60px}
+.maison .sur{font-size:10px;letter-spacing:.3em;text-transform:uppercase;opacity:.45;
+  font-family:system-ui,sans-serif;margin-bottom:8px}
+.maison h1{font-size:clamp(26px,3.4vw,40px);letter-spacing:-.02em;margin-bottom:26px}
+.maison h1 em{font-style:italic}
+.qui{display:flex;gap:10px;margin-bottom:30px;font-family:system-ui,sans-serif}
+.qui button{border:1px solid rgba(10,10,10,.25);padding:9px 16px;font-size:11px;
+  letter-spacing:.06em;transition:.25s}
+.qui button.on{background:var(--noir);color:#fff;border-color:var(--noir)}
+.qui .st{font-size:10px;opacity:.55;display:block;margin-top:3px;letter-spacing:.04em}
+.etape{font-size:9px;letter-spacing:.26em;text-transform:uppercase;opacity:.4;
+  font-family:system-ui,sans-serif;margin:26px 0 12px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid rgba(10,10,10,.22);padding:11px 18px;font-size:13px;transition:.25s;
+  position:relative}
+.chip:hover{border-color:var(--noir)}
+.chip.on{background:var(--noir);color:#fff;border-color:var(--noir)}
+.chip small{display:block;font-size:9px;letter-spacing:.1em;opacity:.55;
+  font-family:system-ui,sans-serif;margin-top:3px}
+.chip.voile{opacity:.42;cursor:default;border-style:dashed}
+.chip.voile:hover{border-color:rgba(10,10,10,.22)}
+.nuance{width:40px;height:40px;border:1px solid rgba(10,10,10,.2);transition:.25s;position:relative}
+.nuance.on{outline:2px solid var(--noir);outline-offset:2px}
+.total{margin-top:34px;display:flex;align-items:flex-end;gap:26px}
+.total .v{font-size:34px;letter-spacing:-.02em}
+.total .l{font-size:9px;letter-spacing:.24em;text-transform:uppercase;opacity:.4;
+  font-family:system-ui,sans-serif;margin-bottom:8px}
+.cta{border:1px solid var(--noir);padding:15px 32px;font-size:10px;letter-spacing:.22em;
+  text-transform:uppercase;font-family:system-ui,sans-serif;transition:.3s}
+.cta:hover{background:var(--noir);color:#fff}
+.cta[disabled]{opacity:.3;cursor:default}
+.cta[disabled]:hover{background:none;color:inherit}
+.note-maison{font-size:12px;line-height:1.8;opacity:.6;max-width:52ch;margin-top:18px;
+  font-style:italic}
+
+/* page devis cliente */
+.devis-doc{background:#fff;max-width:660px;margin:0 auto;padding:44px clamp(22px,5vw,54px);
+  box-shadow:0 30px 80px rgba(10,10,10,.12)}
+.devis-doc .num{font-size:9px;letter-spacing:.26em;opacity:.45;font-family:system-ui,sans-serif;
+  text-transform:uppercase;display:flex;justify-content:space-between}
+.devis-doc h1{margin:14px 0 24px}
+.ligne{display:flex;justify-content:space-between;gap:14px;padding:10px 0;
+  border-bottom:1px solid rgba(10,10,10,.1);font-size:13px}
+.ligne .k{font-size:9px;letter-spacing:.16em;text-transform:uppercase;opacity:.45;
+  font-family:system-ui,sans-serif;padding-top:3px}
+.ligne .p{font-size:11px;opacity:.55;white-space:nowrap;font-family:system-ui,sans-serif}
+.devis-doc .tt{display:flex;justify-content:space-between;align-items:flex-end;margin-top:22px}
+.devis-doc .tt .v{font-size:30px}
+.devis-actions{display:flex;gap:12px;margin-top:30px;flex-wrap:wrap}
+.cta--plein{background:var(--noir);color:#fff}
+.etat-b{display:inline-block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  font-family:system-ui,sans-serif;padding:4px 10px;border:1px solid currentColor}
+.vide-maison{opacity:.5;font-style:italic;font-size:14px;padding:60px 0;text-align:center}
+
+/* ═══ THE BLUE SOLE (back-office + CRM) ═══ */
+.bo{background:var(--bo-fond);min-height:100%;padding:26px clamp(16px,3vw,40px) 60px;
+  font-family:system-ui,sans-serif}
+.bo h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:#dde3ea;
+  margin-bottom:4px}
+.bo .ss{font-size:11px;color:#7d8590;margin-bottom:24px}
+.bo h1 b{color:var(--azur);font-weight:600}
+.grille{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+.liste{display:flex;flex-direction:column;gap:8px}
+.dcard{border:1px solid var(--bo-bord);background:var(--bo-carte);padding:12px 14px;
+  text-align:left;transition:.2s;width:100%}
+.dcard:hover{border-color:#3a4453}
+.dcard.on{border-color:var(--azur)}
+.dcard .n{font-size:12px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.dcard .m{font-size:11px;color:#9aa4b2;margin-top:4px}
+.badge{font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;
+  border:1px solid;white-space:nowrap}
+.badge.brouillon{color:#9aa4b2;border-color:#3a4453}
+.badge.envoye{color:var(--azur);border-color:var(--azur)}
+.badge.consulte{color:var(--warn);border-color:var(--warn)}
+.badge.a_retravailler{color:var(--warn);border-color:var(--warn)}
+.badge.accepte{color:var(--ok);border-color:var(--ok)}
+.badge.acompte_encaisse,.badge.en_production{color:var(--ok);border-color:var(--ok)}
+.detail{border:1px solid var(--bo-bord);background:var(--bo-carte);padding:20px 22px}
+.detail h2{font-size:13px;letter-spacing:.06em;display:flex;justify-content:space-between;
+  align-items:center;gap:10px;margin-bottom:14px;color:#dde3ea}
+.spec{font-size:12px;color:#9aa4b2;line-height:1.9}
+.spec b{color:#dde3ea;font-weight:500}
+.spec .sku{color:var(--azur);font-family:ui-monospace,monospace;font-size:11px}
+.bo-actions{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.btn{border:1px solid var(--bo-bord);padding:9px 16px;font-size:11px;letter-spacing:.05em;
+  transition:.2s;color:#dde3ea}
+.btn:hover{border-color:var(--azur);color:var(--azur)}
+.btn--azur{border-color:var(--azur);color:var(--azur)}
+.btn[disabled]{opacity:.3;cursor:default}
+.btn[disabled]:hover{border-color:var(--bo-bord);color:#dde3ea}
+.hist{margin-top:20px;border-top:1px solid var(--bo-bord);padding-top:12px}
+.hist h3{font-size:10px;letter-spacing:.18em;color:#7d8590;margin-bottom:8px}
+.hist .h{font-size:11px;color:#9aa4b2;padding:3px 0}
+.hist .h b{color:#dde3ea;font-weight:500}
+.vide{color:#586170;font-size:12px;font-style:italic;padding:30px;text-align:center}
+
+/* CRM */
+.crm-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
+.fiche{border:1px solid var(--bo-bord);background:var(--bo-carte);padding:18px 20px}
+.fiche h2{font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.cercle{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--azur);
+  border:1px solid var(--azur);padding:3px 9px}
+.cercle.zero{color:#7d8590;border-color:#3a4453}
+.fiche .meta{font-size:11px;color:#7d8590;margin:6px 0 14px}
+.tl{border-left:1px solid var(--bo-bord);margin-left:4px;padding-left:14px;display:flex;
+  flex-direction:column;gap:8px;max-height:300px;overflow:auto}
+.tl .e{font-size:11px;color:#9aa4b2;position:relative;line-height:1.5}
+.tl .e::before{content:'';position:absolute;left:-17.5px;top:5px;width:6px;height:6px;
+  background:var(--azur);border-radius:0}
+.tl .e small{color:#586170;display:block;font-size:9px}
+.taches{margin-top:14px;border-top:1px solid var(--bo-bord);padding-top:10px}
+.taches h3{font-size:10px;letter-spacing:.18em;color:var(--warn);margin-bottom:8px}
+.tache{font-size:11px;color:#d29922;padding:6px 9px;border:1px dashed #6d5310;margin-bottom:6px}
+</style></head>
+<body>
+
+<header>
+  <span class="marque">TIRABOSCHI</span>
+  <span class="ss">maquette de l'écosystème — un cerveau, des organes, un journal</span>
+  <nav class="roles">
+    <button class="role on" data-pan="atelier">Atelier · Cliente</button>
+    <button class="role" data-pan="espace">Espace cliente</button>
+    <button class="role" data-pan="backoffice">Back-office · Conseiller</button>
+    <button class="role" data-pan="crm">CRM · The Society</button>
+  </nav>
+  <span class="horloge">Jour <b id="jour">0</b><button id="plus7">+7 jours</button></span>
+</header>
+
+<main>
+<div class="scene">
+
+  <!-- ═══ ATELIER (cliente) ═══ -->
+  <section class="pan maison on" id="pan-atelier">
+    <p class="sur">L'Atelier · conception sur-mesure</p>
+    <h1>Composer <em>sa</em> pièce</h1>
+    <div class="qui" id="quiAtelier"></div>
+    <div class="etape">01 · La silhouette</div>
+    <div class="chips" id="chModele"></div>
+    <div class="etape">02 · La matière <span style="opacity:.5">— servie déjà filtrée par la Plateforme selon la cliente</span></div>
+    <div class="chips" id="chMatiere"></div>
+    <div class="etape">03 · La nuance</div>
+    <div class="chips" id="chNuance"></div>
+    <div class="etape">04 · Les ferrures</div>
+    <div class="chips" id="chFerrure"></div>
+    <div class="total">
+      <div><div class="l">Estimation</div><div class="v" id="atTotal">—</div></div>
+      <button class="cta" id="confier">Confier à mon conseiller</button>
+    </div>
+    <p class="note-maison">Rien n'est mis « au panier » : la conception part chez votre
+      conseiller, qui établit le devis. C'est lui qui vous écrit.</p>
+  </section>
+
+  <!-- ═══ ESPACE CLIENTE (page /devis/:token) ═══ -->
+  <section class="pan maison" id="pan-espace">
+    <p class="sur">Votre espace · devis</p>
+    <div class="qui" id="quiEspace"></div>
+    <div id="espaceCorps"></div>
+  </section>
+
+  <!-- ═══ BACK-OFFICE ═══ -->
+  <section class="pan bo" id="pan-backoffice">
+    <h1>Back-office <b>· Devis</b></h1>
+    <p class="ss">Corbeille du conseiller — corriger ne notifie jamais ; seul « Envoyer » écrit à la cliente.</p>
+    <div class="grille">
+      <div class="liste" id="boListe"></div>
+      <div class="detail" id="boDetail"><p class="vide">Aucun devis sélectionné.</p></div>
+    </div>
+  </section>
+
+  <!-- ═══ CRM ═══ -->
+  <section class="pan bo" id="pan-crm">
+    <h1>CRM <b>· The Society</b></h1>
+    <p class="ss">Les timelines ne sont pas saisies : elles SONT le journal, filtré par cliente. Les tâches naissent des triggers.</p>
+    <div class="crm-grille" id="crmGrille"></div>
+  </section>
+
+</div>
+
+<aside>
+  <h2>ORGANES — ils exécutent, ils ne décident pas</h2>
+  <div id="organes">
+    <div class="org" id="org-shopify"><h3>Shopify <i data-c>0</i></h3><p data-p>Vitrine + registre.<br>Aucune commande.</p></div>
+    <div class="org" id="org-stripe"><h3>Stripe <i data-c>0</i></h3><p data-p>Aucun paiement.</p></div>
+    <div class="org" id="org-klaviyo"><h3>Klaviyo <i data-c>0</i></h3><p data-p>Aucun email.</p></div>
+    <div class="org" id="org-whatsapp"><h3>WhatsApp <i data-c>0</i></h3><p data-p>Aucun message.</p></div>
+  </div>
+  <h2>JOURNAL D'ÉVÉNEMENTS — la seule voie entre modules</h2>
+  <div id="journal"></div>
+</aside>
+</main>
+
+<script>
+'use strict';
+/* ════════════════ ÉTAT SIMULÉ (la « base unique ») ════════════════ */
+const $=id=>document.getElementById(id);
+const euros=n=>n.toLocaleString('fr-FR')+' €';
+
+const CLIENTES={
+  claire:{nom:'Claire Fontaine',statut:0,canal:'email',ca:0},
+  helene:{nom:'Hélène Vasseur',statut:3,canal:'whatsapp',ca:56200},
+};
+/* Le Référentiel : visibilité = gating The Society, code_erp = pont vers le SKU */
+const MODELES=[
+  {id:'colette',nom:'Colette',erp:'CO',base:3200},
+  {id:'olympe',nom:'Olympe',erp:'OL',base:2900},
+];
+const MATIERES=[
+  {id:'graine',nom:'Grainé',erp:'CU001',d:0,vis:0},
+  {id:'caviar',nom:'Caviar',erp:'CU014',d:180,vis:0},
+  {id:'alligator',nom:'Alligator',erp:'CU031',d:3800,vis:2},
+  {id:'galuchat',nom:'Galuchat',erp:'CU027',d:3100,vis:3},
+];
+const NUANCES=[
+  {id:'noir',nom:'Noir',erp:'NR',hex:'#161616'},
+  {id:'cognac',nom:'Cognac',erp:'CG',hex:'#8f5424'},
+  {id:'marine',nom:'Marine',erp:'MA',hex:'#243352'},
+  {id:'craie',nom:'Craie',erp:'CR',hex:'#efe9dd'},
+];
+const FERRURES=[
+  {id:'laiton',nom:'Laiton naturel',erp:'LA',d:0},
+  {id:'palladium',nom:'Argent palladié',erp:'PA',d:340},
+  {id:'or24',nom:'Or 24 carats',erp:'OR',d:1800},
+];
+
+let JOUR=0, seqDevis=0, seqSerie=0;
+const DB={devis:[],journal:[],taches:[],organes:{shopify:[],stripe:[],klaviyo:[],whatsapp:[]}};
+
+/* ════════════════ LE JOURNAL — cœur de la maquette ════════════════
+   Chaque fait métier passe par emettre(). Les « workers » (consommer)
+   réagissent — jamais un module n'en appelle un autre directement.   */
+function emettre(type,sujet,donnees,muet){
+  const evt={type,sujet,donnees:donnees||{},jour:JOUR,muet:!!muet};
+  DB.journal.unshift(evt);
+  consommer(evt);
+  rendreJournal();rendreCRM();
+}
+function consommer(evt){
+  /* commerce.worker : la commande Shopify n'existe QU'À l'encaissement */
+  if(evt.type==='acompte.encaisse'){
+    const d=devisPar(evt.sujet);
+    organe('shopify','Commande <b>#SH-'+(4200+seqDevis)+'</b> créée — payée partiellement, tag sur-mesure');
+    seqSerie++;
+    d.serie='TS-2026-00'+(210+seqSerie);
+    d.etat='en_production';
+    emettre('production.lancee',d.id,{serie:d.serie},true);
+  }
+  /* notifications.worker : exécute les envois DÉCIDÉS (jamais implicites) */
+  if(evt.type==='devis.envoye'){
+    const d=devisPar(evt.sujet);
+    if(evt.donnees.canal==='whatsapp')
+      organe('whatsapp','Template <b>devis_pret</b> → '+CLIENTES[d.cliente].nom+'<br>lien /devis/'+d.token);
+    else
+      organe('klaviyo','Email <b>Votre devis '+d.id+'</b> → '+CLIENTES[d.cliente].nom);
+  }
+  if(evt.type==='devis.accepte'){
+    const d=devisPar(evt.sujet);
+    organe('stripe','Lien Checkout <b>'+euros(d.acompte)+'</b> émis<br>(page /pay/… anti-WebView)');
+  }
+  if(evt.type==='piece.terminee'){
+    organe('klaviyo','Email <b>Votre pièce quitte l\'atelier</b> + passeport produit');
+  }
+  /* crm.worker : triggers → tâches conseiller (garde-fou : jamais d'email auto sur un devis) */
+  if(evt.type==='client.statut_change'){
+    tache(evt.sujet,'Annoncer son passage au cercle '+evt.donnees.vers+' (appel ou WhatsApp personnel)');
+  }
+}
+function organe(nom,html){
+  DB.organes[nom].unshift(html);
+  const el=$('org-'+nom);
+  el.querySelector('[data-c]').textContent=DB.organes[nom].length;
+  el.querySelector('[data-p]').innerHTML=html;
+  el.classList.remove('pulse');void el.offsetWidth;el.classList.add('pulse');
+}
+function tache(cliente,txt){DB.taches.push({cliente,txt,jour:JOUR});rendreCRM()}
+function devisPar(id){return DB.devis.find(d=>d.id===id)}
+
+/* trigger « relance discrète » : devis consulté sans suite depuis 7 jours */
+function evaluerTriggers(){
+  DB.devis.forEach(d=>{
+    if(d.etat==='consulte'&&!d.relance&&JOUR-d.consulteJour>=7){
+      d.relance=true;
+      emettre('trigger.relance_devis',d.id,{regle:'consulté sans suite ≥ 7 j'},true);
+      tache(d.cliente,'Relance discrète du devis '+d.id+' ('+CLIENTES[d.cliente].nom+') — consulté il y a '+(JOUR-d.consulteJour)+' jours, sans suite');
+    }
+  });
+}
+
+/* ════════════════ MODULE DEVIS (machine à états) ════════════════ */
+function creerDevis(cliente,spec){
+  seqDevis++;
+  const d={
+    id:'DEV-2026-'+String(40+seqDevis).padStart(4,'0'),
+    cliente,etat:'brouillon',v:1,spec,
+    token:Math.random().toString(36).slice(2,8),
+    hist:[{j:JOUR,t:'v1 créée depuis le configurateur'}],
+  };
+  chiffrer(d);
+  DB.devis.push(d);
+  emettre('devis.cree',d.id,{cliente,total:d.total});
+  return d;
+}
+function chiffrer(d){
+  const m=MODELES.find(x=>x.id===d.spec.modele),
+        mat=MATIERES.find(x=>x.id===d.spec.matiere),
+        nu=NUANCES.find(x=>x.id===d.spec.nuance),
+        f=FERRURES.find(x=>x.id===d.spec.ferrure);
+  d.total=m.base+mat.d+f.d;
+  d.acompte=Math.round(d.total*.3);
+  d.sku=m.erp+'-26H-'+mat.erp+'-'+f.erp+'-'+nu.erp;
+}
+function nouvelleVersion(d){
+  /* on fait tourner la ferrure pour matérialiser une correction */
+  const i=FERRURES.findIndex(f=>f.id===d.spec.ferrure);
+  d.spec.ferrure=FERRURES[(i+1)%FERRURES.length].id;
+  d.v++;chiffrer(d);
+  if(d.etat!=='brouillon'&&d.etat!=='a_retravailler')d.etat='brouillon';
+  d.hist.push({j:JOUR,t:'v'+d.v+' — correction ferrures ('+FERRURES.find(f=>f.id===d.spec.ferrure).nom+')'});
+  emettre('devis.version',d.id,{v:d.v,note:'AUCUN message émis — la page cliente montrera v'+d.v},true);
+  rendreBO();rendreEspace();
+}
+function envoyer(d,canal){
+  d.etat='envoye';d.hist.push({j:JOUR,t:'v'+d.v+' envoyée par '+canal});
+  emettre('devis.envoye',d.id,{canal,v:d.v});
+  rendreBO();rendreEspace();
+}
+function consulter(d){
+  if(d.etat==='envoye'){d.etat='consulte';d.consulteJour=JOUR;
+    d.hist.push({j:JOUR,t:'consulté par la cliente'});
+    emettre('devis.consulte',d.id,{});rendreBO()}
+}
+function demanderAjustement(d){
+  d.etat='a_retravailler';d.hist.push({j:JOUR,t:'la cliente demande un ajustement'});
+  emettre('devis.ajustement_demande',d.id,{});
+  tache(d.cliente,'Reprendre le devis '+d.id+' — ajustement demandé par '+CLIENTES[d.cliente].nom);
+  rendreBO();rendreEspace();
+}
+function accepter(d){
+  d.etat='accepte';d.hist.push({j:JOUR,t:'v'+d.v+' acceptée par la cliente'});
+  emettre('devis.accepte',d.id,{montant:d.total,acompte:d.acompte});
+  rendreBO();rendreEspace();
+}
+function payerAcompte(d){
+  d.etat='acompte_encaisse';d.hist.push({j:JOUR,t:'acompte '+euros(d.acompte)+' encaissé (webhook Stripe)'});
+  organe('stripe','Paiement <b>'+euros(d.acompte)+'</b> confirmé — checkout.session.completed');
+  emettre('acompte.encaisse',d.id,{montant:d.acompte});
+  d.hist.push({j:JOUR,t:'commande Shopify créée · pièce '+d.serie+' en production'});
+  rendreBO();rendreEspace();
+}
+
+/* ════════════════ ATELIER (configurateur simplifié) ════════════════ */
+let clienteActive='claire';
+const sel={modele:'colette',matiere:'graine',nuance:'noir',ferrure:'laiton'};
+
+function rendreQui(el,cb){
+  el.innerHTML='';
+  Object.entries(CLIENTES).forEach(([id,c])=>{
+    const b=document.createElement('button');
+    b.className=id===clienteActive?'on':'';
+    b.innerHTML=c.nom+'<span class="st">'+(c.statut?'The Society · cercle '+c.statut:'hors programme')+'</span>';
+    b.onclick=()=>{clienteActive=id;cb()};
+    el.appendChild(b);
+  });
+}
+function rendreAtelier(){
+  rendreQui($('quiAtelier'),rendreAtelier);
+  const st=CLIENTES[clienteActive].statut;
+  $('chModele').innerHTML='';
+  MODELES.forEach(m=>{
+    const b=document.createElement('button');
+    b.className='chip'+(sel.modele===m.id?' on':'');
+    b.innerHTML=m.nom+'<small>'+euros(m.base)+'</small>';
+    b.onclick=()=>{sel.modele=m.id;rendreAtelier()};
+    $('chModele').appendChild(b);
+  });
+  $('chMatiere').innerHTML='';
+  MATIERES.forEach(m=>{
+    const b=document.createElement('button');
+    const ok=st>=m.vis;
+    b.className='chip'+(ok?(sel.matiere===m.id?' on':''):' voile');
+    b.innerHTML=ok?(m.nom+'<small>'+(m.d?'+ '+euros(m.d):'inclus')+'</small>')
+                 :(m.nom+'<small>réservé au cercle '+m.vis+'</small>');
+    if(ok)b.onclick=()=>{sel.matiere=m.id;rendreAtelier()};
+    $('chMatiere').appendChild(b);
+  });
+  if(st<MATIERES.find(m=>m.id===sel.matiere).vis)sel.matiere='graine';
+  $('chNuance').innerHTML='';
+  NUANCES.forEach(n=>{
+    const b=document.createElement('button');
+    b.className='nuance'+(sel.nuance===n.id?' on':'');
+    b.style.background=n.hex;b.title=n.nom;
+    b.onclick=()=>{sel.nuance=n.id;rendreAtelier()};
+    $('chNuance').appendChild(b);
+  });
+  $('chFerrure').innerHTML='';
+  FERRURES.forEach(f=>{
+    const b=document.createElement('button');
+    b.className='chip'+(sel.ferrure===f.id?' on':'');
+    b.innerHTML=f.nom+'<small>'+(f.d?'+ '+euros(f.d):'inclus')+'</small>';
+    b.onclick=()=>{sel.ferrure=f.id;rendreAtelier()};
+    $('chFerrure').appendChild(b);
+  });
+  const m=MODELES.find(x=>x.id===sel.modele),
+        mat=MATIERES.find(x=>x.id===sel.matiere),
+        f=FERRURES.find(x=>x.id===sel.ferrure);
+  $('atTotal').textContent=euros(m.base+mat.d+f.d);
+}
+$('confier').onclick=()=>{
+  creerDevis(clienteActive,{...sel});
+  allerPan('backoffice');
+};
+
+/* ════════════════ BACK-OFFICE ════════════════ */
+let devisOuvert=null;
+function rendreBO(){
+  const L=$('boListe');L.innerHTML='';
+  if(!DB.devis.length){L.innerHTML='<p class="vide">Aucun devis. Créez-en un depuis l\'Atelier.</p>'}
+  DB.devis.forEach(d=>{
+    const b=document.createElement('button');
+    b.className='dcard'+(devisOuvert===d.id?' on':'');
+    b.innerHTML='<span class="n">'+d.id+'<span class="badge '+d.etat+'">'+d.etat.replace(/_/g,' ')+'</span></span>'+
+      '<span class="m">'+CLIENTES[d.cliente].nom+' · v'+d.v+' · '+euros(d.total)+'</span>';
+    b.onclick=()=>{devisOuvert=d.id;rendreBO()};
+    L.appendChild(b);
+  });
+  const D=$('boDetail');
+  const d=devisPar(devisOuvert);
+  if(!d){D.innerHTML='<p class="vide">Aucun devis sélectionné.</p>';return}
+  const mat=MATIERES.find(x=>x.id===d.spec.matiere),
+        m=MODELES.find(x=>x.id===d.spec.modele),
+        nu=NUANCES.find(x=>x.id===d.spec.nuance),
+        f=FERRURES.find(x=>x.id===d.spec.ferrure);
+  const envoyable=['brouillon','a_retravailler'].includes(d.etat);
+  D.innerHTML='<h2>'+d.id+' — version '+d.v+'<span class="badge '+d.etat+'">'+d.etat.replace(/_/g,' ')+'</span></h2>'+
+    '<div class="spec">Cliente : <b>'+CLIENTES[d.cliente].nom+'</b>'+
+    (CLIENTES[d.cliente].statut?' · The Society cercle '+CLIENTES[d.cliente].statut:'')+
+    '<br>Pièce : <b>'+m.nom+'</b> · '+mat.nom+' '+nu.nom+' · ferrures '+f.nom+
+    '<br>SKU prévu : <span class="sku">'+d.sku+'</span>'+(d.serie?' · pièce <span class="sku">'+d.serie+'</span>':'')+
+    '<br>Total : <b>'+euros(d.total)+'</b> · acompte 30 % : <b>'+euros(d.acompte)+'</b></div>'+
+    '<div class="bo-actions">'+
+    '<button class="btn" id="bVer">Corriger → v'+(d.v+1)+' (silencieux)</button>'+
+    '<button class="btn btn--azur" id="bMail" '+(envoyable?'':'disabled')+'>Envoyer par email</button>'+
+    '<button class="btn btn--azur" id="bWa" '+(envoyable?'':'disabled')+'>Envoyer par WhatsApp</button>'+
+    (d.etat==='en_production'?'<button class="btn" id="bFin">Pièce terminée (atelier)</button>':'')+
+    '</div>'+
+    '<div class="hist"><h3>HISTORIQUE — rien ne se perd, rien ne s\'écrase</h3>'+
+    d.hist.map(h=>'<div class="h">J'+h.j+' — <b>'+h.t+'</b></div>').join('')+'</div>';
+  $('bVer').onclick=()=>nouvelleVersion(d);
+  if(envoyable){
+    $('bMail').onclick=()=>envoyer(d,'email');
+    $('bWa').onclick=()=>envoyer(d,'whatsapp');
+  }
+  const fin=$('bFin');
+  if(fin)fin.onclick=()=>{
+    d.etat='livree';d.hist.push({j:JOUR,t:'pièce '+d.serie+' terminée — QC passée'});
+    emettre('piece.terminee',d.id,{serie:d.serie});
+    rendreBO();rendreEspace();
+  };
+}
+
+/* ════════════════ ESPACE CLIENTE (/devis/:token) ════════════════ */
+function rendreEspace(){
+  rendreQui($('quiEspace'),rendreEspace);
+  const corps=$('espaceCorps');
+  const liste=DB.devis.filter(d=>d.cliente===clienteActive&&!['brouillon','a_retravailler'].includes(d.etat));
+  if(!liste.length){
+    corps.innerHTML='<p class="vide-maison">Aucun devis reçu pour l\'instant — '+
+      'un devis en cours de correction chez le conseiller n\'apparaît jamais ici à moitié fait.</p>';
+    return;
+  }
+  corps.innerHTML='';
+  liste.forEach(d=>{
+    consulter(d);
+    const m=MODELES.find(x=>x.id===d.spec.modele),
+          mat=MATIERES.find(x=>x.id===d.spec.matiere),
+          nu=NUANCES.find(x=>x.id===d.spec.nuance),
+          f=FERRURES.find(x=>x.id===d.spec.ferrure);
+    const doc=document.createElement('div');doc.className='devis-doc';
+    let actions='';
+    if(d.etat==='consulte')
+      actions='<button class="cta" data-a="ajuster">Demander un ajustement</button>'+
+              '<button class="cta cta--plein" data-a="accepter">Valider cette pièce</button>';
+    else if(d.etat==='accepte')
+      actions='<button class="cta cta--plein" data-a="payer">Régler l\'acompte · '+euros(d.acompte)+'</button>';
+    else if(d.etat==='acompte_encaisse'||d.etat==='en_production')
+      actions='<span class="etat-b">En façonnage — pièce '+d.serie+'</span>';
+    else if(d.etat==='livree')
+      actions='<span class="etat-b">Livrée — passeport produit '+d.serie+'</span>';
+    doc.innerHTML='<div class="num"><span>Devis '+d.id+' · v'+d.v+'</span><span>Atelier Tiraboschi</span></div>'+
+      '<h1>Votre <em>'+m.nom+'</em></h1>'+
+      '<div class="ligne"><span class="k">Silhouette</span><span>'+m.nom+'</span><span class="p">'+euros(m.base)+'</span></div>'+
+      '<div class="ligne"><span class="k">Matière</span><span>'+mat.nom+' · '+nu.nom+'</span><span class="p">'+(mat.d?'+ '+euros(mat.d):'incluse')+'</span></div>'+
+      '<div class="ligne"><span class="k">Ferrures</span><span>'+f.nom+'</span><span class="p">'+(f.d?'+ '+euros(f.d):'incluses')+'</span></div>'+
+      '<div class="tt"><span class="l" style="font-size:9px;letter-spacing:.24em;text-transform:uppercase;opacity:.4;font-family:system-ui">Estimation ferme</span><span class="v">'+euros(d.total)+'</span></div>'+
+      '<div class="devis-actions">'+actions+'</div>';
+    corps.appendChild(doc);
+    doc.querySelectorAll('[data-a]').forEach(b=>{
+      b.onclick=()=>{
+        if(b.dataset.a==='ajuster')demanderAjustement(d);
+        if(b.dataset.a==='accepter')accepter(d);
+        if(b.dataset.a==='payer')payerAcompte(d);
+        rendreEspace();
+      };
+    });
+  });
+}
+
+/* ════════════════ CRM ════════════════ */
+function rendreCRM(){
+  const G=$('crmGrille');G.innerHTML='';
+  Object.entries(CLIENTES).forEach(([id,c])=>{
+    const evts=DB.journal.filter(e=>{
+      const d=devisPar(e.sujet);return (d&&d.cliente===id)||e.sujet===id;
+    });
+    const taches=DB.taches.filter(t=>t.cliente===id);
+    const f=document.createElement('div');f.className='fiche';
+    f.innerHTML='<h2>'+c.nom+'<span class="cercle'+(c.statut?'':' zero')+'">'+
+      (c.statut?'Cercle '+c.statut:'Hors programme')+'</span></h2>'+
+      '<div class="meta">CA cumulé '+euros(c.ca)+' · canal préféré : '+c.canal+
+      ' · statut projeté en metafield Shopify</div>'+
+      '<div class="tl">'+(evts.length?evts.map(e=>'<div class="e">'+e.type+
+        (e.donnees.canal?' ('+e.donnees.canal+')':'')+
+        '<small>J'+e.jour+' · '+e.sujet+'</small></div>').join(''):'<div class="e" style="color:#586170">timeline vide</div>')+'</div>'+
+      (taches.length?'<div class="taches"><h3>TÂCHES CONSEILLER (nées des triggers)</h3>'+
+        taches.map(t=>'<div class="tache">J'+t.jour+' — '+t.txt+'</div>').join('')+'</div>':'');
+    G.appendChild(f);
+  });
+}
+
+/* ════════════════ JOURNAL (rendu) ════════════════ */
+function rendreJournal(){
+  const J=$('journal');J.innerHTML='';
+  DB.journal.forEach(e=>{
+    const div=document.createElement('div');
+    div.className='evt'+(e.muet?' muet':'');
+    div.innerHTML='<div class="t">'+e.type+'</div>'+
+      '<div class="d">'+e.sujet+(e.donnees.note?' — '+e.donnees.note:'')+
+      (e.donnees.canal?' · canal '+e.donnees.canal:'')+
+      (e.donnees.serie?' · '+e.donnees.serie:'')+
+      (e.donnees.montant?' · '+euros(e.donnees.montant):'')+'</div>'+
+      '<div class="q">J'+e.jour+' · consommé par : <b>'+
+      (e.muet?'journal seul (aucune notification)':'workers crm · notifications')+'</b></div>';
+    J.appendChild(div);
+  });
+}
+
+/* ════════════════ NAVIGATION + HORLOGE ════════════════ */
+function allerPan(p){
+  document.querySelectorAll('.role').forEach(b=>b.classList.toggle('on',b.dataset.pan===p));
+  document.querySelectorAll('.pan').forEach(x=>x.classList.remove('on'));
+  $('pan-'+p).classList.add('on');
+  if(p==='backoffice')rendreBO();
+  if(p==='espace')rendreEspace();
+  if(p==='crm')rendreCRM();
+}
+document.querySelectorAll('.role').forEach(b=>b.onclick=()=>allerPan(b.dataset.pan));
+$('plus7').onclick=()=>{JOUR+=7;$('jour').textContent=JOUR;evaluerTriggers();rendreCRM()};
+
+rendreAtelier();rendreBO();rendreCRM();
+</script>
+</body></html>
