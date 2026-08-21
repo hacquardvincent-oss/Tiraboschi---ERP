@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma';
-import { requireAuth } from '../middleware/auth';
-import { createSale, markSalePaid, syncSale } from '../services/sales';
+import { requireAuth, requireRole } from '../middleware/auth';
+import { createSale, markSalePaid, markBalancePaid, syncSale } from '../services/sales';
 import { calculateTax, createDraftOrder } from '../services/shopify';
 import { generateSaleDocument } from '../services/invoice';
 import {
@@ -90,7 +90,7 @@ salesRouter.get('/alerts', async (_req, res) => {
       depositCents: s.depositCents,
       balanceCents: s.balanceCents,
       dueCents: s.status === 'AWAITING_BALANCE' ? s.balanceCents : s.depositCents,
-      kind: s.status === 'AWAITING_BALANCE' ? 'balance' : 'deposit',
+      kind: s.status === 'AWAITING_BALANCE' ? 'balance' : s.paymentPlan === 'DEPOSIT_50' ? 'deposit' : 'full',
       ageDays: Math.floor((now - new Date(s.createdAt).getTime()) / 86400000),
       createdAt: s.createdAt,
     })),
@@ -121,9 +121,11 @@ salesRouter.post('/', async (req, res) => {
   }
 });
 
-/** Marquer payé (intérim : encaissement externe ; remplacé par Stripe en 3b.2/3b.3). */
+/** Marquer payé (intérim : encaissement externe). Sur une vente en attente de solde → marque le solde. */
 salesRouter.post('/:id/pay', async (req, res) => {
   try {
+    const sale = await prisma.sale.findUnique({ where: { id: req.params.id } });
+    if (sale?.status === 'AWAITING_BALANCE') return res.json(await markBalancePaid(req.params.id, {}));
     res.json(await markSalePaid(req.params.id, req.body ?? {}));
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
@@ -153,7 +155,7 @@ salesRouter.post('/:id/sync', async (req, res) => {
   res.json(await prisma.sale.findUnique({ where: { id: req.params.id } }));
 });
 
-salesRouter.post('/:id/refund', async (req, res) => {
+salesRouter.post('/:id/refund', requireRole('ADMIN'), async (req, res) => {
   try {
     res.json(await refundSale(req.params.id));
   } catch (e) {
@@ -161,7 +163,7 @@ salesRouter.post('/:id/refund', async (req, res) => {
   }
 });
 
-salesRouter.post('/:id/cancel', async (req, res) => {
+salesRouter.post('/:id/cancel', requireRole('ADMIN'), async (req, res) => {
   try {
     res.json(await cancelSale(req.params.id));
   } catch (e) {

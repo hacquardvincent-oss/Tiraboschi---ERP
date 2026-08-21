@@ -23,7 +23,9 @@ export async function orchestrateSale(saleId: string): Promise<void> {
   const sale = await prisma.sale.findUnique({ where: { id: saleId } });
   // Production lancée dès l'acompte (AWAITING_BALANCE) ou au paiement complet (PAID).
   if (!sale || (sale.status !== 'PAID' && sale.status !== 'AWAITING_BALANCE')) return;
-  const ref = sale.shopifyOrderName ?? sale.reference;
+  // Clé d'idempotence STABLE (la référence vente, jamais le nom Shopify qui apparaît plus tard) :
+  // évite de re-créer des ordres de production entre l'acompte et le solde.
+  const ref = sale.reference;
 
   const [poCount, ftCount] = await Promise.all([
     prisma.productionOrder.count({ where: { clientOrderRef: ref } }),

@@ -33,7 +33,7 @@ interface Alert {
   currency: string;
   status: SaleStatus;
   dueCents: number;
-  kind: 'deposit' | 'balance';
+  kind: 'deposit' | 'balance' | 'full';
   ageDays: number;
 }
 
@@ -170,7 +170,7 @@ export function Sales() {
             {alerts.slice(0, 6).map((a) => (
               <div key={a.id} className="flex items-center justify-between text-xs">
                 <span className="text-white/70">
-                  {a.customerName || a.reference} · <span className={a.kind === 'balance' ? 'text-azure' : 'text-amber-400'}>{a.kind === 'balance' ? t('Solde dû') : t("Acompte en attente")}</span> {money(a.dueCents, a.currency)}
+                  {a.customerName || a.reference} · <span className={a.kind === 'balance' ? 'text-azure' : 'text-amber-400'}>{a.kind === 'balance' ? t('Solde dû') : a.kind === 'deposit' ? t('Acompte en attente') : t('Paiement en attente')}</span> {money(a.dueCents, a.currency)}
                   {a.ageDays > 0 && <span className="text-white/30"> · {a.ageDays} j</span>}
                 </span>
                 <button className="text-azure" disabled={busy === a.id} onClick={() => genLink(a.id, a.kind === 'balance' ? 'balance' : undefined)}>

@@ -104,6 +104,7 @@ export function generateSaleDocument(sale: Sale, type: DocType): Promise<Buffer>
     y += 10;
     doc.font('Helvetica').fontSize(9).fillColor(INK);
     for (const it of items) {
+      if (y > doc.page.height - 140) { doc.addPage(); y = 48; } // évite le débordement bas de page
       doc.fillColor(INK).text(it.title, L, y, { width: cQty - 40 - L });
       doc.text(String(it.qty), cQty - 30, y, { width: 30, align: 'right' });
       doc.text(money(it.priceCents), cUnit - 70, y, { width: 70, align: 'right' });
@@ -134,6 +135,7 @@ export function generateSaleDocument(sale: Sale, type: DocType): Promise<Buffer>
 
     // ─── Conditions de paiement ───
     y += 24;
+    if (y > doc.page.height - 170) { doc.addPage(); y = 48; } // le bloc paiement ne doit pas chevaucher le pied
     if (isDeposit) {
       doc.fillColor(INK).rect(L, y, W, 22).fill(INK);
       doc.fillColor('#FFF').font('Helvetica-Bold').fontSize(9).text(t.terms, L + 10, y + 7, { characterSpacing: 1 });

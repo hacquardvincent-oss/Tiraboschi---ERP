@@ -167,12 +167,15 @@ export async function createTerminalPaymentIntent(
   const market = marketOf(sale);
   const stripe = stripeFor(market);
 
+  // Respecte le plan de paiement : acompte, solde ou total (comme le lien).
+  const leg = defaultLeg(sale);
+  const amount = leg === 'deposit' ? sale.depositCents : leg === 'balance' ? sale.balanceCents : sale.totalCents;
   const pi = await stripe.paymentIntents.create({
-    amount: sale.totalCents,
+    amount,
     currency: sale.currency.toLowerCase(),
     payment_method_types: ['card_present'],
     capture_method: 'manual',
-    metadata: { saleId: sale.id, reference: sale.reference },
+    metadata: { saleId: sale.id, reference: sale.reference, leg },
     ...(sale.customerEmail ? { receipt_email: sale.customerEmail } : {}),
   });
 
@@ -188,13 +191,12 @@ export async function createTerminalPaymentIntent(
 export async function captureTerminalPayment(saleId: string): Promise<void> {
   const sale = await prisma.sale.findUnique({ where: { id: saleId } });
   if (!sale?.stripePaymentIntentId) throw new Error('Aucun paiement TPE en cours pour cette vente.');
-  const stripe = stripeFor(marketOf(sale));
+  const market = marketOf(sale);
+  const stripe = stripeFor(market);
   const pi = await stripe.paymentIntents.capture(sale.stripePaymentIntentId);
   if (pi.status === 'succeeded') {
-    await markSalePaid(sale.id, {
-      stripeAccount: marketOf(sale),
-      stripePaymentIntentId: pi.id,
-    });
+    // Route selon la jambe encaissée (acompte/solde/total).
+    await applyLegPayment(sale.id, (pi.metadata?.leg as PaymentLeg) || 'full', market, { stripePaymentIntentId: pi.id });
   }
 }
 
@@ -213,6 +215,8 @@ export async function handleStripeWebhook(
   const stripe = stripeFor(acc.market);
   const event = stripe.webhooks.constructEvent(rawBody, signature, acc.webhookSecret);
 
+  // Une session Checkout `mode:payment` émet À LA FOIS checkout.session.completed ET
+  // payment_intent.succeeded → on route LES DEUX par la même jambe (les marquages sont idempotents).
   if (event.type === 'checkout.session.completed') {
     const s = event.data.object as {
       id: string;
@@ -221,24 +225,33 @@ export async function handleStripeWebhook(
       metadata: Record<string, string> | null;
     };
     if (s.payment_status === 'paid') {
-      const saleId = s.metadata?.saleId;
-      const leg = s.metadata?.leg;
-      if (saleId) {
-        if (leg === 'deposit') {
-          await markDepositPaid(saleId, { stripeAccount: market, depositSessionId: s.id });
-        } else if (leg === 'balance') {
-          await markBalancePaid(saleId, { stripeAccount: market, balanceSessionId: s.id });
-        } else {
-          await payByMetadata(saleId, market, {
-            stripeSessionId: s.id,
-            stripePaymentIntentId: typeof s.payment_intent === 'string' ? s.payment_intent : undefined,
-          });
-        }
-      }
+      await applyLegPayment(s.metadata?.saleId, (s.metadata?.leg as PaymentLeg) || 'full', market, {
+        stripeSessionId: s.id,
+        stripePaymentIntentId: typeof s.payment_intent === 'string' ? s.payment_intent : undefined,
+      });
     }
   } else if (event.type === 'payment_intent.succeeded') {
     const pi = event.data.object as { id: string; metadata: Record<string, string> | null };
-    await payByMetadata(pi.metadata?.saleId, market, { stripePaymentIntentId: pi.id });
+    await applyLegPayment(pi.metadata?.saleId, (pi.metadata?.leg as PaymentLeg) || 'full', market, {
+      stripePaymentIntentId: pi.id,
+    });
+  }
+}
+
+/** Route un encaissement vers le bon marquage selon la jambe (idempotent). */
+async function applyLegPayment(
+  saleId: string | undefined,
+  leg: PaymentLeg,
+  market: string,
+  payment: { stripeSessionId?: string; stripePaymentIntentId?: string },
+): Promise<void> {
+  if (!saleId) return;
+  if (leg === 'deposit') {
+    await markDepositPaid(saleId, { stripeAccount: market, depositSessionId: payment.stripeSessionId, stripePaymentIntentId: payment.stripePaymentIntentId });
+  } else if (leg === 'balance') {
+    await markBalancePaid(saleId, { stripeAccount: market, balanceSessionId: payment.stripeSessionId, stripePaymentIntentId: payment.stripePaymentIntentId });
+  } else {
+    await payByMetadata(saleId, market, payment);
   }
 }
 
@@ -260,13 +273,23 @@ export async function refundSale(saleId: string) {
   if (sale.status === 'REFUNDED') throw new Error('Vente déjà remboursée.');
   const stripe = stripeFor(sale.stripeAccount ?? marketOf(sale));
 
-  let paymentIntentId = sale.stripePaymentIntentId ?? undefined;
-  if (!paymentIntentId && sale.stripeSessionId) {
-    const session = await stripe.checkout.sessions.retrieve(sale.stripeSessionId);
-    paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+  // Rassemble tous les paiements : PI direct (TPE) + chaque session Checkout (acompte, solde, complet).
+  const piIds = new Set<string>();
+  if (sale.stripePaymentIntentId) piIds.add(sale.stripePaymentIntentId);
+  for (const sid of [sale.stripeSessionId, sale.depositSessionId, sale.balanceSessionId]) {
+    if (!sid) continue;
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sid);
+      const pid = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+      if (pid) piIds.add(pid);
+    } catch { /* session introuvable → ignorée */ }
   }
-  if (paymentIntentId) {
-    await stripe.refunds.create({ payment_intent: paymentIntentId });
+  const collected = sale.paidAt || sale.depositPaidAt || sale.balancePaidAt;
+  if (piIds.size === 0 && collected) {
+    throw new Error('Aucun paiement Stripe retrouvé pour cette vente — remboursement à effectuer manuellement.');
+  }
+  for (const pid of piIds) {
+    await stripe.refunds.create({ payment_intent: pid }).catch(() => {});
   }
   if (sale.shopifyOrderId) await cancelShopifyOrder(sale.shopifyOrderId).catch(() => {});
   await prisma.sale.update({ where: { id: saleId }, data: { status: 'REFUNDED' } });

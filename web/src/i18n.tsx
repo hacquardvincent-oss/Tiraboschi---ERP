@@ -126,6 +126,7 @@ const EN: Record<string, string> = {
   'Solde': 'Balance',
   'Solde dû': 'Balance due',
   'Acompte en attente': 'Deposit pending',
+  'Paiement en attente': 'Payment pending',
   'Devis': 'Quote',
   'Facture': 'Invoice',
   'Encaisser le solde': 'Collect balance',

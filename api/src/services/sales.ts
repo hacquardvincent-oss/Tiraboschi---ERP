@@ -114,38 +114,37 @@ export async function markSalePaid(
  */
 export async function markDepositPaid(
   saleId: string,
-  payment: { stripeAccount?: string; depositSessionId?: string } = {},
+  payment: { stripeAccount?: string; depositSessionId?: string; stripePaymentIntentId?: string } = {},
 ) {
-  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
-  if (!sale) return null;
-  if (sale.depositPaidAt) return sale; // idempotent
-  await prisma.sale.update({
-    where: { id: saleId },
+  // Transition atomique (garde contre la double-livraison de webhook) : PENDING → AWAITING_BALANCE.
+  const done = await prisma.sale.updateMany({
+    where: { id: saleId, depositPaidAt: null, status: 'PENDING' },
     data: { status: 'AWAITING_BALANCE', depositPaidAt: new Date(), ...payment },
   });
-  await syncSale(saleId).catch(() => {}); // crée la commande Shopify partiellement payée
-  await orchestrateSale(saleId).catch(() => {}); // lance la production dès l'acompte
+  if (done.count === 0) return prisma.sale.findUnique({ where: { id: saleId } }); // déjà traité
+  await syncSale(saleId).catch(() => {}); // commande Shopify partiellement payée
+  await orchestrateSale(saleId).catch(() => {}); // production dès l'acompte
   return prisma.sale.findUnique({ where: { id: saleId } });
 }
 
 /** Solde encaissé : la vente passe « payée » et la commande Shopify est marquée payée. */
 export async function markBalancePaid(
   saleId: string,
-  payment: { stripeAccount?: string; balanceSessionId?: string } = {},
+  payment: { stripeAccount?: string; balanceSessionId?: string; stripePaymentIntentId?: string } = {},
 ) {
-  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
-  if (!sale) return null;
-  if (sale.status === 'PAID') return sale; // idempotent
-  await prisma.sale.update({
-    where: { id: saleId },
-    data: { status: 'PAID', balancePaidAt: new Date(), paidAt: sale.paidAt ?? new Date(), ...payment },
+  // Transition atomique : AWAITING_BALANCE → PAID (idempotent).
+  const done = await prisma.sale.updateMany({
+    where: { id: saleId, status: 'AWAITING_BALANCE' },
+    data: { status: 'PAID', balancePaidAt: new Date(), paidAt: new Date(), ...payment },
   });
-  if (sale.shopifyOrderId) {
+  if (done.count === 0) return prisma.sale.findUnique({ where: { id: saleId } }); // déjà soldée
+  const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+  if (sale?.shopifyOrderId) {
     await markShopifyOrderPaid(sale.shopifyOrderId).catch(() => {});
   } else {
     await syncSale(saleId).catch(() => {});
   }
-  await orchestrateSale(saleId).catch(() => {}); // idempotent (déjà fait à l'acompte)
+  await orchestrateSale(saleId).catch(() => {}); // idempotent
   return prisma.sale.findUnique({ where: { id: saleId } });
 }
 

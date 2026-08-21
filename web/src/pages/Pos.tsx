@@ -587,9 +587,10 @@ export function Pos() {
           <span className="text-white/40 text-xs">{t('Paiement')} :</span>
           <button className={'px-3 py-1.5 rounded border ' + (plan === 'FULL' ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setPlan('FULL')}>{t('100 % maintenant')}</button>
           <button className={'px-3 py-1.5 rounded border ' + (plan === 'DEPOSIT_50' ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setPlan('DEPOSIT_50')}>{t('Acompte 50 / 50')}</button>
-          {plan === 'DEPOSIT_50' && (
-            <span className="text-xs text-white/50">{t('Acompte')} {fmt(total / 2)} · {t('Solde')} {fmt(total - total / 2)}</span>
-          )}
+          {plan === 'DEPOSIT_50' && (() => {
+            const dep = Math.round((total * 100) / 2) / 100; // = round(totalCents/2)/100 (comme le backend)
+            return <span className="text-xs text-white/50">{t('Acompte')} {fmt(dep)} · {t('Solde')} {fmt(total - dep)}</span>;
+          })()}
         </div>
 
         <div className="mt-3 text-sm space-y-1">
