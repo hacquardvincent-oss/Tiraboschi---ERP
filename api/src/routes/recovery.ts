@@ -1,0 +1,32 @@
+import { Router } from 'express';
+import { createRecoveryOrder, listRecentOrders } from '../services/shopify';
+import { requireRecoveryKey } from '../middleware/recoveryKey';
+
+export const recoveryRouter = Router();
+
+recoveryRouter.use(requireRecoveryKey);
+
+/** Réconciliation : commandes Shopify existantes depuis une date (?since=2026-05-28). */
+recoveryRouter.get('/orders', async (req, res) => {
+  const since = String(req.query.since ?? '2026-05-28');
+  try {
+    const data = await listRecentOrders(since);
+    res.json({ status: 'ok', since, count: data.orders.nodes.length, orders: data.orders.nodes });
+  } catch (err) {
+    res.status(502).json({ status: 'error', message: (err as Error).message });
+  }
+});
+
+/** Recrée une commande encaissée mais manquante (montants + taxes exacts). */
+recoveryRouter.post('/order', async (req, res) => {
+  try {
+    const result = await createRecoveryOrder(req.body);
+    if (result.orderCreate.userErrors.length > 0) {
+      res.status(422).json({ status: 'error', userErrors: result.orderCreate.userErrors });
+      return;
+    }
+    res.json({ status: 'ok', order: result.orderCreate.order });
+  } catch (err) {
+    res.status(502).json({ status: 'error', message: (err as Error).message });
+  }
+});

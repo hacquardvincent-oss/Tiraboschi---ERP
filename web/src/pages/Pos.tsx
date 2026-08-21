@@ -1,0 +1,744 @@
+import { useEffect, useRef, useState } from 'react';
+import { useNav } from '../nav';
+import { useToast } from '../toast';
+import { useI18n } from '../i18n';
+import { Thumb, Button } from '../components/ui';
+import { Configurator } from '../components/Configurator';
+import { api, apiDownload } from '../lib/api';
+import { useCurrency } from '../store';
+import { chargeOnReader } from '../lib/terminal';
+
+interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  priceHtEur?: string | null;
+  priceHtUsd?: string | null;
+  imageUrl?: string | null;
+}
+
+interface CartLine {
+  uid: string; // clé interne (produit catalogue: id ; hors catalogue: hc-…)
+  id?: string; // id produit (catalogue uniquement → disponibilité)
+  sku: string;
+  name: string;
+  unitHt: number; // prix HT unitaire dans la devise courante
+  qty: number;
+  imageUrl?: string | null;
+}
+
+interface CartAvailLine {
+  sku: string;
+  path: 'stock' | 'production' | 'blocked';
+  inStock: number;
+  readyDate: string | null;
+  note?: string;
+}
+
+interface SavedSale {
+  id: string;
+  reference: string;
+  market: 'FR' | 'US';
+}
+
+const TVA_EUR = 0.2; // TVA France 20%
+
+export function Pos() {
+  const { currency } = useCurrency(); // EUR (France/EU) | USD (US)
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const emptyCustomer = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneExt: currency === 'USD' ? '+1' : '+33',
+    phone: '',
+    address1: '',
+    address2: '',
+    city: '',
+    zip: '',
+    province: '',
+    country: currency === 'USD' ? 'US' : 'FR',
+    acceptsEmail: true,
+    acceptsSms: true,
+    note: '',
+  };
+  const [customer, setCustomer] = useState(emptyCustomer);
+  const [addressValidated, setAddressValidated] = useState(false);
+  const setC = (patch: Partial<typeof emptyCustomer>) => {
+    setCustomer((c) => ({ ...c, ...patch }));
+    setTaxQuote(null); // l'adresse change → la taxe calculée n'est plus valable
+    setAddressValidated(false);
+  };
+  const [usTaxRate] = useState('8'); // estimation d'attente (taxe exacte calculée par Shopify à la validation)
+  const [ddp, setDdp] = useState(false);
+  const [plan, setPlan] = useState<'FULL' | 'DEPOSIT_50'>('FULL'); // 100 % ou acompte 50/50
+  const [shipping, setShipping] = useState('100'); // frais de port DDP (param Admin à terme)
+  const toast = useToast();
+  const { t, lang } = useI18n();
+  const setErr = (m: string) => { if (m) toast(m, 'error'); }; // erreurs → toast
+  const zipRef = useRef<HTMLInputElement>(null);
+  const [zipError, setZipError] = useState(false);
+  const marketInit = useRef(true);
+  // Switch de marché (USD/EUR) : on adapte le formulaire aux contraintes du pays (comme la V1).
+  // → préfixe téléphone (+1/+33) + pays par défaut (US/FR). Le « zip obligatoire » suit déjà la devise.
+  useEffect(() => {
+    if (marketInit.current) { marketInit.current = false; return; } // pas au montage (ne pas écraser un client CRM pré-rempli)
+    setCustomer((c) => ({ ...c, phoneExt: currency === 'USD' ? '+1' : '+33', country: currency === 'USD' ? 'US' : 'FR' }));
+    setAddressValidated(false);
+    setTaxQuote(null);
+  }, [currency]);
+  function focusZip() {
+    setZipError(true);
+    setClientOpen(true);
+    setTimeout(() => { zipRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); zipRef.current?.focus(); }, 60);
+  }
+  const [busy, setBusy] = useState<'' | 'save' | 'link' | 'tpe' | 'cust' | 'draft'>('');
+  const [saved, setSaved] = useState<SavedSale | null>(null);
+  const [clientOpen, setClientOpen] = useState(true);
+  const [payLink, setPayLink] = useState('');
+  const [showShare, setShowShare] = useState(false);
+  const [tpeStatus, setTpeStatus] = useState('');
+
+  const [cartAvail, setCartAvail] = useState<{ readyDate: string | null; lines: CartAvailLine[] } | null>(null);
+  const [taxQuote, setTaxQuote] = useState<{ totalTaxCents: number; currency: string; lines: { title: string; rate: number; amountCents: number }[] } | null>(null);
+  const [taxBusy, setTaxBusy] = useState(false);
+
+  const { posCustomer, setPosCustomer } = useNav();
+  useEffect(() => {
+    // Frais de port DDP par défaut depuis le paramètre Admin.
+    api<{ value: string | null }>('/api/settings/globalShippingUsd')
+      .then((s) => { if (s.value) setShipping(s.value); })
+      .catch(() => {});
+    // Client transmis depuis le CRM (« Choisir »).
+    if (posCustomer) {
+      setCustomer((c) => ({ ...c, ...Object.fromEntries(Object.entries(posCustomer).filter(([, v]) => v != null)) }));
+      setPosCustomer(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const cat = cart.filter((l) => l.id);
+    if (cat.length === 0) return setCartAvail(null);
+    api<{ readyDate: string | null; lines: CartAvailLine[] }>('/api/catalog/availability', {
+      method: 'POST',
+      body: { items: cat.map((l) => ({ id: l.id, qty: l.qty })) },
+    })
+      .then(setCartAvail)
+      .catch(() => setCartAvail(null));
+  }, [cart]);
+
+  const search = async (query: string) => {
+    setQ(query);
+    if (query.length < 1) return setResults([]);
+    try {
+      setResults(await api<Product[]>('/api/products?q=' + encodeURIComponent(query)));
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+
+  const priceOf = (p: Product) =>
+    parseFloat((currency === 'EUR' ? p.priceHtEur : p.priceHtUsd) ?? '0') || 0;
+
+  const dirty = () => {
+    // Le panier change → la vente précédemment enregistrée n'est plus à jour.
+    setSaved(null);
+    setPayLink('');
+    setTpeStatus('');
+    setTaxQuote(null);
+  };
+
+  async function computeTax(): Promise<boolean> {
+    if (cart.length === 0) { setErr('Ajoute au moins un article avant de valider.'); return false; }
+    if (!customer.zip.trim()) { setErr('Saisis le code postal pour calculer la taxe.'); focusZip(); return false; }
+    if (!customer.country) { setErr('Pays du client requis pour le calcul des taxes.'); return false; }
+    setTaxBusy(true);
+    try {
+      const q = await api<{ totalTaxCents: number; currency: string; lines: { title: string; rate: number; amountCents: number }[] }>(
+        '/api/pos/sales/tax-quote',
+        {
+          method: 'POST',
+          body: {
+            currency,
+            items: cart.map((l) => ({ title: l.name, priceCents: Math.round(l.unitHt * 100), qty: l.qty })),
+            address: {
+              countryCode: customer.country,
+              provinceCode: customer.province || undefined,
+              zip: customer.zip || undefined,
+              city: customer.city || undefined,
+              address1: customer.address1 || undefined,
+            },
+          },
+        },
+      );
+      setTaxQuote(q);
+      return true;
+    } catch {
+      // Shopify indisponible → on n'empêche pas la vente : estimation utilisée, taxe exacte au paiement.
+      setTaxQuote(null);
+      return false;
+    } finally {
+      setTaxBusy(false);
+    }
+  }
+
+  const add = (p: Product) => {
+    setCart((c) => {
+      const i = c.findIndex((l) => l.uid === p.id);
+      if (i >= 0) {
+        const copy = [...c];
+        copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
+        return copy;
+      }
+      return [...c, { uid: p.id, id: p.id, sku: p.sku, name: p.name, unitHt: priceOf(p), qty: 1, imageUrl: p.imageUrl }];
+    });
+    setQ('');
+    setResults([]);
+    dirty();
+  };
+
+  const [customName, setCustomName] = useState('');
+  const [customPrice, setCustomPrice] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+  const [showConfig, setShowConfig] = useState(true); // catalogue (navigation) affiché par défaut
+  const addCustom = () => {
+    const price = parseFloat(customPrice) || 0;
+    if (!customName.trim() || price <= 0) return setErr('Nom et prix de la pièce hors catalogue requis.');
+    setErr('');
+    setCart((c) => [...c, { uid: 'hc-' + Date.now(), sku: '', name: customName.trim(), unitHt: price, qty: 1 }]);
+    setCustomName('');
+    setCustomPrice('');
+    setShowCustom(false);
+    dirty();
+  };
+
+  const removeLine = (uid: string) => {
+    setCart((c) => c.filter((l) => l.uid !== uid));
+    dirty();
+  };
+
+  const subtotal = cart.reduce((s, l) => s + l.unitHt * l.qty, 0);
+  const ship = ddp ? parseFloat(shipping) || 0 : 0;
+  const taxable = subtotal + ship;
+  const estTax = currency === 'EUR' ? subtotal * TVA_EUR : taxable * ((parseFloat(usTaxRate) || 0) / 100);
+  // Taxe réelle Shopify si calculée, sinon estimation.
+  const tax = taxQuote ? taxQuote.totalTaxCents / 100 : estTax;
+  const total = subtotal + ship + tax;
+
+  const sym = currency === 'EUR' ? '€' : '$';
+  const fmt = (n: number) => n.toFixed(2) + ' ' + sym;
+  const fmtDate = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+
+  /** Enregistre le client dans Shopify : crée si nouveau, met à jour si existant (avec confirmation, pas d'écrasement silencieux). */
+  async function saveCustomer() {
+    const email = customer.email.trim();
+    if (!email) return setErr('Email requis pour enregistrer le client.');
+    setBusy('cust');
+    try {
+      const phone = customer.phone ? `${customer.phoneExt}${customer.phone}` : undefined;
+      const d = await api<{ customers: { nodes: { id: string; email: string | null }[] } }>('/api/crm/search?q=' + encodeURIComponent(email));
+      const existing = d.customers.nodes.find((c) => (c.email ?? '').toLowerCase() === email.toLowerCase());
+      if (existing) {
+        if (!confirm('Un client avec cet email existe déjà. Mettre à jour ses informations ?')) { setBusy(''); return; }
+        await api('/api/crm/customer', { method: 'PUT', body: { id: existing.id, firstName: customer.firstName, lastName: customer.lastName, phone, note: customer.note } });
+        toast('Client mis à jour.', 'success');
+      } else {
+        await api('/api/crm/customer', { method: 'POST', body: { firstName: customer.firstName, lastName: customer.lastName, email, phone, note: customer.note } });
+        toast('Client créé.', 'success');
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  /** « Valider l'adresse » : calcule la taxe Shopify (US) ; TVA fixe en FR. Ne bloque jamais la vente. */
+  async function validateAddress() {
+    if (cart.length === 0) return setErr('Ajoute au moins un article avant de valider.');
+    if (currency === 'USD') {
+      const ok = await computeTax();
+      if (!ok && customer.zip.trim()) {
+        setAddressValidated(true); // adresse OK : à défaut de quote Shopify, on garde l'estimation
+        toast('Adresse validée. Taxe estimée — le montant exact est confirmé au paiement.', 'info');
+        return;
+      }
+      if (ok) {
+        setAddressValidated(true);
+        toast('Adresse validée — taxe calculée.', 'success');
+      }
+      return;
+    }
+    setAddressValidated(true);
+    toast('Adresse validée — TVA 20% appliquée.', 'success');
+  }
+
+  /** Validation : email (reçu) ; code postal obligatoire en US (taxe) ; adresse si DDP. */
+  function validate(): string | null {
+    if (!customer.email.trim()) return 'Email client requis (pour le reçu).';
+    if (currency === 'USD' && !customer.zip.trim()) {
+      focusZip();
+      return 'Code postal obligatoire (calcul de la Sales Tax US).';
+    }
+    if (ddp && (!customer.address1.trim() || !customer.city.trim())) {
+      return 'Adresse et ville requises pour une expédition DDP.';
+    }
+    return null;
+  }
+
+  /** Crée la vente côté serveur (une seule fois) et la mémorise pour l'encaissement. */
+  async function ensureSale(): Promise<SavedSale> {
+    if (saved) return saved;
+    const items = cart.map((l) => ({
+      title: l.name,
+      sku: l.sku || undefined,
+      priceCents: Math.round(l.unitHt * 100),
+      qty: l.qty,
+    }));
+    const taxLines = taxQuote
+      ? taxQuote.lines.map((t) => ({ title: t.title, rate: t.rate, amountCents: t.amountCents }))
+      : [
+          {
+            title: currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)',
+            rate: currency === 'EUR' ? 0.2 : (parseFloat(usTaxRate) || 0) / 100,
+            amountCents: Math.round(tax * 100),
+          },
+        ];
+    const market: 'FR' | 'US' = currency === 'EUR' ? 'FR' : 'US';
+    const sale = await api<{ id: string; reference: string }>('/api/pos/sales', {
+      method: 'POST',
+      body: {
+        market,
+        currency,
+        customer,
+        items,
+        taxLines,
+        shippingCents: ddp ? Math.round(ship * 100) : 0,
+        paymentPlan: plan,
+      },
+    });
+    const s: SavedSale = { id: sale.id, reference: sale.reference, market };
+    setSaved(s);
+    return s;
+  }
+
+  async function onSave() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    const v = validate();
+    if (v) return setErr(v);
+    setErr('');
+    setBusy('save');
+    try {
+      const s = await ensureSale();
+      toast(`Vente enregistrée (${s.reference}).`, 'success');
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onPaymentLink() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    const v = validate();
+    if (v) return setErr(v);
+    setErr('');
+    setBusy('link');
+    try {
+      const s = await ensureSale();
+      await api<{ url: string }>(`/api/pos/sales/${s.id}/payment-link`, { method: 'POST', body: {} });
+      // Lien partagé = page de redirection brandée (téléphone-safe), pas l'URL Stripe brute.
+      setPayLink(`${location.origin}/pay/${s.id}`);
+      setShowShare(true);
+      toast('Lien de paiement généré.', 'success');
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onDraft() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    setBusy('draft');
+    try {
+      const r = await api<{ name: string; invoiceUrl: string | null }>('/api/pos/sales/draft', {
+        method: 'POST',
+        body: {
+          market: currency === 'EUR' ? 'FR' : 'US',
+          currency,
+          customer,
+          customerEmail: customer.email || undefined,
+          items: cart.map((l) => ({ title: l.name, sku: l.sku || undefined, priceCents: Math.round(l.unitHt * 100), qty: l.qty })),
+        },
+      });
+      toast(`Brouillon ${r.name} enregistré dans Shopify.`, 'success');
+      if (r.invoiceUrl) setPayLink(r.invoiceUrl);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onTpe() {
+    if (cart.length === 0) return setErr('Panier vide.');
+    const v = validate();
+    if (v) return setErr(v);
+    setErr('');
+    setBusy('tpe');
+    setTpeStatus('Initialisation…');
+    try {
+      const s = await ensureSale();
+      await chargeOnReader(s.id, s.market, setTpeStatus);
+      setTpeStatus('Paiement accepté ✓ — commande Shopify en cours de création.');
+      toast('Paiement TPE accepté ✓', 'success');
+    } catch (e) {
+      setTpeStatus('');
+      setErr((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function newSale() {
+    setCart([]);
+    setCustomer(emptyCustomer);
+    setDdp(false);
+    setPlan('FULL');
+    setSaved(null);
+    setPayLink('');
+    setTpeStatus('');
+    setErr('');
+  }
+
+  // Messages d'envoi du lien — soignés, bilingues (langue de l'app), avec le prénom du client.
+  const hello = () => {
+    const name = customer.firstName.trim();
+    if (lang === 'fr') return name ? `Cher·e ${name},` : 'Bonjour,';
+    return name ? `Dear ${name},` : 'Hello,';
+  };
+  const emailSubject = () => (lang === 'fr' ? 'Votre commande Tiraboschi — lien de paiement sécurisé' : 'Your Tiraboschi order — secure payment link');
+  const shareBody = () =>
+    lang === 'fr'
+      ? `${hello()}\n\nNous vous remercions pour votre confiance. Voici votre lien de paiement sécurisé pour finaliser votre commande :\n${payLink}\n\nNotre équipe reste à votre entière disposition.\nAvec toute notre considération,\nL'équipe Tiraboschi`
+      : `${hello()}\n\nThank you for your trust. Here is your secure payment link to complete your order:\n${payLink}\n\nOur team remains at your full disposal.\nWith our warmest regards,\nThe Tiraboschi team`;
+  const shareShort = () =>
+    lang === 'fr'
+      ? `${hello()} votre lien de paiement sécurisé Tiraboschi : ${payLink}`
+      : `${hello()} your secure Tiraboschi payment link: ${payLink}`;
+  const phoneDigits = () => `${customer.phoneExt}${customer.phone}`.replace(/\D/g, '');
+  function shareWhatsapp() {
+    if (!payLink) return;
+    const to = customer.phone ? phoneDigits() : '';
+    window.open(`https://wa.me/${to}?text=${encodeURIComponent(shareShort())}`, '_blank');
+  }
+  function shareEmail() {
+    window.open(`mailto:${customer.email}?subject=${encodeURIComponent(emailSubject())}&body=${encodeURIComponent(shareBody())}`);
+  }
+  function shareSms() {
+    window.open(`sms:${customer.phone ? phoneDigits() : ''}?&body=${encodeURIComponent(shareShort())}`);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="card">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base">{t('Caisse (POS)')}</h2>
+          <span className="text-xs px-2 py-1 rounded border border-white/20">
+            {t('Marché')} : {currency === 'EUR' ? 'France / EU (TVA 20%)' : 'US (Sales tax)'}
+          </span>
+        </div>
+      </div>
+
+      {/* Client */}
+      <div className="card">
+        <button className="w-full flex items-center justify-between mb-2" onClick={() => setClientOpen(!clientOpen)}>
+          <span className="text-xs uppercase tracking-editorial text-white/50">{t('Client')} {customer.email && <span className="text-white/40 normal-case tracking-normal">· {customer.email}</span>}</span>
+          <span className="text-white/40 text-xs">{clientOpen ? '▾' : '▸'}</span>
+        </button>
+        <div className={'grid grid-cols-2 gap-3 ' + (clientOpen ? '' : 'hidden')}>
+          <input className="field" placeholder={t('Prénom')} value={customer.firstName} onChange={(e) => setC({ firstName: e.target.value })} />
+          <input className="field" placeholder={t('Nom')} value={customer.lastName} onChange={(e) => setC({ lastName: e.target.value })} />
+          <input className="field col-span-2" type="email" placeholder={t('Email (obligatoire pour le reçu)')} value={customer.email} onChange={(e) => setC({ email: e.target.value })} />
+          <div className="flex gap-2 col-span-2">
+            <select className="field w-24" value={customer.phoneExt} onChange={(e) => setC({ phoneExt: e.target.value })}>
+              <option value="+33">🇫🇷 +33</option>
+              <option value="+1">🇺🇸 +1</option>
+              <option value="+44">🇬🇧 +44</option>
+              <option value="+39">🇮🇹 +39</option>
+            </select>
+            <input className="field flex-1" type="tel" placeholder={t('Téléphone')} value={customer.phone} onChange={(e) => setC({ phone: e.target.value })} />
+          </div>
+          <input className="field col-span-2" placeholder={t('Adresse (ligne 1)')} value={customer.address1} onChange={(e) => setC({ address1: e.target.value })} />
+          <input className="field col-span-2" placeholder={t('Appartement, suite… (optionnel)')} value={customer.address2} onChange={(e) => setC({ address2: e.target.value })} />
+          <input className="field" placeholder={t('Ville')} value={customer.city} onChange={(e) => setC({ city: e.target.value })} />
+          <div>
+            <input
+              ref={zipRef}
+              className={'field ' + (zipError ? 'border-red-500' : '')}
+              placeholder={t('Code postal') + (currency === 'USD' ? ' *' : '')}
+              value={customer.zip}
+              onChange={(e) => { setZipError(false); setC({ zip: e.target.value }); }}
+            />
+            {zipError && <p className="text-red-400 text-[11px] mt-1">{t('Code postal obligatoire (taxe US).')}</p>}
+          </div>
+          <input className="field" placeholder={t('État / Province')} value={customer.province} onChange={(e) => setC({ province: e.target.value })} />
+          <select className="field" value={customer.country} onChange={(e) => setC({ country: e.target.value })}>
+            <option value="US">États-Unis</option>
+            <option value="FR">France</option>
+            <option value="GB">Royaume-Uni</option>
+            <option value="IT">Italie</option>
+          </select>
+          <textarea className="field col-span-2" rows={2} placeholder={t('Notes sur le client (goûts…)')} value={customer.note} onChange={(e) => setC({ note: e.target.value })} />
+        </div>
+        <div className={'flex gap-4 mt-2 text-xs text-white/70 ' + (clientOpen ? '' : 'hidden')}>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={customer.acceptsEmail} onChange={(e) => setC({ acceptsEmail: e.target.checked })} /> {t('Marketing email')}
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={customer.acceptsSms} onChange={(e) => setC({ acceptsSms: e.target.checked })} /> {t('Marketing SMS')}
+          </label>
+        </div>
+        {clientOpen && (
+          <div className="mt-3 space-y-2">
+            <button className={'btn w-full ' + (addressValidated ? 'opacity-90' : '')} disabled={taxBusy} onClick={validateAddress}>
+              {taxBusy ? t('Calcul…') : addressValidated ? '✓ ' + t('Adresse validée') : t("Valider l'adresse (calcul des taxes)")}
+            </button>
+            <button className="text-azure text-sm" disabled={busy === 'cust'} onClick={saveCustomer}>
+              {busy === 'cust' ? '…' : t('Enregistrer le client')}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Produits */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs uppercase tracking-editorial text-white/50">{t('Produit')}</div>
+          <div className="flex gap-3">
+            <button className="text-azure text-xs" onClick={() => setShowConfig(!showConfig)}>{showConfig ? t('Recherche') : t('Catalogue')}</button>
+            <button className="text-azure text-xs" onClick={() => setShowCustom(!showCustom)}>{t('+ Pièce hors catalogue')}</button>
+          </div>
+        </div>
+        {showConfig ? (
+          <Configurator currency={currency} onAdd={(p) => { add(p); toast(p.name + ' ajouté.', 'success'); }} />
+        ) : (
+        <input className="field" placeholder={t('Rechercher une référence (SKU ou nom)…')} value={q} onChange={(e) => search(e.target.value)} />
+        )}
+        {results.length > 0 && (
+          <div className="mt-2 border border-white/10 rounded divide-y divide-white/10">
+            {results.map((p) => (
+              <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center gap-3" onClick={() => add(p)}>
+                <Thumb src={p.imageUrl} alt={p.name} size={36} />
+                <span className="flex-1 min-w-0"><span className="font-mono text-azure">{p.sku}</span> — {p.name}</span>
+                <span className="shrink-0">{fmt(priceOf(p))}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {showCustom && (
+          <div className="mt-2 border border-white/10 rounded p-3 flex gap-2 items-end">
+            <input className="field flex-1" placeholder={t('Désignation (ex. Sur-mesure)')} value={customName} onChange={(e) => setCustomName(e.target.value)} />
+            <input className="field w-28" type="number" step="0.01" placeholder={t('Prix HT') + ' ' + sym} value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} />
+            <button className="btn" onClick={addCustom}>{t('Ajouter')}</button>
+          </div>
+        )}
+      </div>
+
+      {/* Panier */}
+      <div className="card">
+        <div className="text-xs uppercase tracking-editorial text-white/50 mb-2">{t('Panier')}</div>
+        {cart.length === 0 && <p className="text-white/40 text-sm">{t('Panier vide.')}</p>}
+        {cart.map((l) => (
+          <div key={l.uid} className="flex items-center justify-between py-1.5 border-b border-white/10 text-sm gap-2">
+            <Thumb src={l.imageUrl} alt={l.name} size={36} />
+            <div className="flex-1 min-w-0">
+              <div className="truncate">{l.name}</div>
+              <div className="font-mono text-white/30 text-[11px]">{l.sku || t('HORS CATALOGUE')}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>×{l.qty}</span>
+              <span className="w-20 text-right">{fmt(l.unitHt * l.qty)}</span>
+              <button className="text-red-400/70" onClick={() => removeLine(l.uid)}>✕</button>
+            </div>
+          </div>
+        ))}
+
+        {cart.length > 0 && <CrossSell currency={currency} onAdd={add} />}
+
+        <div className="flex items-center gap-2 mt-3 text-sm flex-wrap">
+          <button className={'px-3 py-1.5 rounded border ' + (!ddp ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setDdp(false)}>{t('Sur place')}</button>
+          <button className={'px-3 py-1.5 rounded border ' + (ddp ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setDdp(true)}>{t('À distance')}</button>
+          {ddp && (
+            <span className="flex items-center gap-1 text-xs text-white/60">
+              {t('Frais de port')} : <b className="text-white/80">{fmt(ship)}</b>
+              <span className="text-white/30">({t('défini en Admin')})</span>
+            </span>
+          )}
+        </div>
+
+        {/* Plan de paiement : 100 % ou acompte 50 / 50 */}
+        <div className="flex items-center gap-2 mt-3 text-sm flex-wrap">
+          <span className="text-white/40 text-xs">{t('Paiement')} :</span>
+          <button className={'px-3 py-1.5 rounded border ' + (plan === 'FULL' ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setPlan('FULL')}>{t('100 % maintenant')}</button>
+          <button className={'px-3 py-1.5 rounded border ' + (plan === 'DEPOSIT_50' ? 'border-gold text-gold' : 'border-white/20 text-white/60')} onClick={() => setPlan('DEPOSIT_50')}>{t('Acompte 50 / 50')}</button>
+          {plan === 'DEPOSIT_50' && (() => {
+            const dep = Math.round((total * 100) / 2) / 100; // = round(totalCents/2)/100 (comme le backend)
+            return <span className="text-xs text-white/50">{t('Acompte')} {fmt(dep)} · {t('Solde')} {fmt(total - dep)}</span>;
+          })()}
+        </div>
+
+        <div className="mt-3 text-sm space-y-1">
+          <Row label={t('Sous-total HT')} value={fmt(subtotal)} />
+          {ddp && <Row label={t('Frais de port (DDP)')} value={fmt(ship)} />}
+          {taxQuote
+            ? taxQuote.lines.map((t, i) => (
+                <Row key={i} label={`${t.title}${t.rate ? ' (' + (t.rate * 100).toFixed(2) + '%)' : ''}`} value={fmt(t.amountCents / 100)} />
+              ))
+            : <Row label={currency === 'EUR' ? 'TVA 20%' : 'Sales tax (est.)'} value={fmt(tax)} />}
+          <div className="flex justify-between font-semibold text-azure pt-1 border-t border-white/10">
+            <span>{t('Total')} {currency === 'EUR' ? 'TTC' : t('taxes comprises')}</span>
+            <span>{fmt(total)}</span>
+          </div>
+          {cartAvail?.readyDate && cart.length > 0 && (
+            <div className="flex justify-between text-xs pt-1">
+              <span className="text-white/50">{t('Livraison estimée au client')}</span>
+              <span className="text-white/80">~{fmtDate(cartAvail.readyDate)}</span>
+            </div>
+          )}
+          {currency === 'USD' && !addressValidated && (
+            <p className="text-amber-400 text-[11px]">⚠ {t('Validez l’adresse pour calculer la Sales Tax.')}</p>
+          )}
+          {currency === 'USD' && addressValidated && !taxQuote && (
+            <p className="text-white/50 text-[11px]">{t('Taxe estimée — montant exact confirmé par Shopify au paiement.')}</p>
+          )}
+          {taxQuote && <p className="text-green-400/70 text-[11px]">{t('Taxe calculée par Shopify pour cette adresse.')}</p>}
+        </div>
+      </div>
+
+      {/* Suivi encaissement (statut TPE, lien généré, nouvelle vente) */}
+      {(tpeStatus || payLink || saved) && (
+        <div className="card">
+          {saved && !payLink && !tpeStatus && (
+            <p className="text-green-400/80 text-sm">Commande enregistrée ({saved.reference}).</p>
+          )}
+          {tpeStatus && <p className="text-azure text-sm">{tpeStatus}</p>}
+          {payLink && (
+            <div className="mt-1 space-y-2">
+              <div className="text-xs uppercase tracking-editorial text-white/50">{t('Lien de paiement')}</div>
+              <input className="field text-xs" readOnly value={payLink} onFocus={(e) => e.currentTarget.select()} />
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={() => navigator.clipboard?.writeText(payLink)}>📋 {t('Copier')}</Button>
+                <Button variant="secondary" className="flex-1" onClick={shareWhatsapp}>💬 WhatsApp</Button>
+              </div>
+              <p className="text-white/40 text-[11px]">
+                Dès que le client paie, la commande Shopify est créée automatiquement (suivi dans <b>Ventes</b>).
+              </p>
+            </div>
+          )}
+          {saved && (
+            <div className="flex items-center gap-4 mt-3 flex-wrap">
+              <button className="text-azure text-sm" onClick={() => apiDownload(`/api/pos/sales/${saved.id}/document?type=quote`, `devis-${saved.reference}.pdf`).catch((e) => toast((e as Error).message, 'error'))}>📄 {t('Devis')}</button>
+              <button className="text-azure text-sm" onClick={() => apiDownload(`/api/pos/sales/${saved.id}/document?type=invoice`, `facture-${saved.reference}.pdf`).catch((e) => toast((e as Error).message, 'error'))}>📄 {t('Facture')}</button>
+              <a className="text-azure text-sm" href={'/receipt/' + saved.id} target="_blank" rel="noreferrer">{t('Reçu')} ↗</a>
+              <button className="text-gold text-sm" onClick={newSale}>{t('+ Nouvelle vente')}</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {cart.length > 0 && (
+        <button className="text-azure text-sm" onClick={onDraft} disabled={busy !== ''}>
+          {busy === 'draft' ? '…' : '⏸ ' + t('Mettre de côté (brouillon Shopify)')}
+        </button>
+      )}
+
+      {/* Barre d'encaissement collante */}
+      <div className="sticky z-20" style={{ bottom: 80 }}>
+        <div className="card border-gold/30 flex items-center gap-3 shadow-lg">
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-editorial text-white/40">
+              {t('Total')} {currency === 'EUR' ? 'TTC' : t('taxes comprises')}
+            </div>
+            <div className="text-xl font-semibold text-gold leading-none">{fmt(total)}</div>
+            {cartAvail && cart.length > 0 && cartAvail.readyDate && (
+              <div className="text-[11px] text-white/40 mt-0.5">{t('Livrable ~')}{fmtDate(cartAvail.readyDate)}</div>
+            )}
+          </div>
+          <Button variant="secondary" onClick={onSave} loading={busy === 'save'} disabled={busy !== '' || cart.length === 0} title={t('Enregistrer')}>
+            {t('Enreg.')}
+          </Button>
+          <Button variant="secondary" onClick={onPaymentLink} loading={busy === 'link'} disabled={busy !== '' || cart.length === 0}>
+            {t('Lien')}
+          </Button>
+          <Button variant="primary" className="px-5 py-3" onClick={onTpe} loading={busy === 'tpe'} disabled={busy !== '' || cart.length === 0}>
+            {t('Encaisser TPE')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Pop-in de partage du lien de paiement */}
+      {showShare && payLink && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4" onClick={() => setShowShare(false)}>
+          <div className="card w-full max-w-sm animate-fadeup" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs uppercase tracking-editorial text-white/50">{t('Envoyer le lien de paiement')}</div>
+              <button className="text-white/50" onClick={() => setShowShare(false)}>✕</button>
+            </div>
+            <input className="field text-xs mb-3" readOnly value={payLink} onFocus={(e) => e.currentTarget.select()} />
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="primary" onClick={shareWhatsapp}>💬 WhatsApp</Button>
+              <Button variant="secondary" onClick={shareEmail}>✉️ {t('Email')}</Button>
+              <Button variant="secondary" onClick={shareSms}>💬 SMS</Button>
+              <Button variant="secondary" onClick={() => { navigator.clipboard?.writeText(payLink); toast(t('Copié'), 'success'); }}>📋 {t('Copier')}</Button>
+            </div>
+            <p className="text-white/40 text-[11px] mt-3">{t('Le client ouvre une page de chargement Tiraboschi puis le paiement sécurisé.')}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Vente additionnelle (cross-sell) : ajout rapide d'accessoires courants au panier. */
+function CrossSell({ currency, onAdd }: { currency: 'EUR' | 'USD'; onAdd: (p: Product) => void }) {
+  const { t } = useI18n();
+  const [items, setItems] = useState<Product[]>([]);
+  useEffect(() => {
+    Promise.all(['Chaîne', 'Anse', 'Pochon', 'Strap'].map((q) =>
+      api<Product[]>('/api/products?q=' + encodeURIComponent(q)).then((r) => r[0] ?? null).catch(() => null),
+    )).then((rs) => {
+      const seen = new Set<string>();
+      setItems(rs.filter((p): p is Product => !!p && !seen.has(p.id) && (seen.add(p.id), true)));
+    });
+  }, []);
+  if (items.length === 0) return null;
+  const price = (p: Product) => parseFloat((currency === 'EUR' ? p.priceHtEur : p.priceHtUsd) ?? '0') || 0;
+  const label = (p: Product) => (p.name?.split(/[–—-]/)[0] ?? p.name).trim();
+  return (
+    <div className="mt-3">
+      <div className="text-[11px] text-white/40 mb-1">{t('Compléments')}</div>
+      <div className="flex flex-wrap gap-2">
+        {items.map((p) => (
+          <button key={p.id} className="text-xs px-2 py-1.5 rounded border border-gold/40 text-gold hover:bg-gold/10" onClick={() => onAdd(p)}>
+            + {label(p)} · {price(p).toFixed(0)}{currency === 'EUR' ? '€' : '$'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-white/80">
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}

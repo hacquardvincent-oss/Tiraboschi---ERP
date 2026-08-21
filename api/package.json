@@ -1,0 +1,44 @@
+{
+  "name": "tiraboschi-erp-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend V2 — Tiraboschi POS / ERP",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "postbuild": "cd ../web && npm install --include=dev --no-audit --no-fund && npm run build",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.10.5",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "pdfkit": "^0.15.2",
+    "prisma": "^6.19.3",
+    "stripe": "^22.2.0",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/pdfkit": "^0.17.6",
+    "tsx": "^4.19.2",
+    "vitest": "^4.1.8"
+  }
+}

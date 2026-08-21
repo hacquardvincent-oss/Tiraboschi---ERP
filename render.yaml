@@ -1,0 +1,31 @@
+# Render Blueprint — backend V2 Tiraboschi ERP
+# Crée le service web depuis ce repo. Les secrets (sync: false) sont saisis dans le dashboard Render.
+services:
+  - type: web
+    name: tiraboschi-erp-api
+    runtime: node
+    rootDir: api
+    plan: free
+    branch: claude/peaceful-knuth-zHzNQ
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SHOPIFY_STORE_DOMAIN
+        value: axp150-71.myshopify.com
+      - key: SHOPIFY_API_VERSION
+        value: "2026-04"
+      - key: SHOPIFY_CLIENT_ID
+        sync: false
+      - key: SHOPIFY_CLIENT_SECRET
+        sync: false
+      - key: RECOVERY_KEY
+        sync: false
+      - key: STRIPE_API_KEY_FR
+        sync: false
+      - key: STRIPE_API_KEY_US
+        sync: false
+      - key: ALERT_WEBHOOK_URL
+        sync: false
