@@ -1,0 +1,17 @@
+{
+  "name": "Tiraboschi POS / ERP",
+  "short_name": "Tiraboschi",
+  "description": "Caisse, collection, stock et ventes — Tiraboschi Paris.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "lang": "fr",
+  "background_color": "#0C0B0A",
+  "theme_color": "#0C0B0A",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
