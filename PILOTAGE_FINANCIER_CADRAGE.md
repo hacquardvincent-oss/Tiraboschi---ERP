@@ -1,6 +1,6 @@
 # Pilotage financier Tiraboschi — Dossier de cadrage
 
-> Version 1.0 — 2026-09-11 · Rédigé pour arbitrage par Vincent Hacquard
+> Version 1.1 — 2026-09-11 · Rédigé pour arbitrage par Vincent Hacquard
 > Périmètre : P&L de gestion, contrôle de gestion (atterrissages 2+10 / 3+9), suivi des
 > prestataires, analyse du PRI, connexion comptable Pennylane.
 > Documents liés : `ARCHITECTURE_ECOSYSTEME.md`, `HANDOFF_V2_SCOPING.md`, `CONTEXT.md`
@@ -15,6 +15,13 @@
 | **D7** | L'outil sera une **application séparée** (interface + authentification dédiées), et non un module du back-office POS | ✅ acté |
 | **D7bis** | Réserve technique associée : l'app séparée **lit la base MongoDB de l'écosystème en lecture seule** plutôt que de dupliquer BOM et ventes. Séparation = accès et interface, jamais duplication de données | ⚠️ à confirmer |
 | **D8** | Ordre des chantiers : C1 (migration base) → C2 (sécurité) → Phase 1 (PRI/marge) → Phase 2 (P&L/atterrissage) | ⚠️ à valider |
+| **D9** | **Le FEC est le contrat d'entrée comptable, pas l'API Pennylane.** Zéro abonnement supplémentaire, zéro dépendance éditeur (§2bis) | ⚠️ à valider |
+| **D10** | **La ventilation analytique vit dans l'outil, pas dans Pennylane** : le module analytique payant n'est pas souscrit (§2bis) | ⚠️ à valider |
+
+> **Contrainte cadre posée par le dirigeant (2026-09-11)** : construire une marque IA-native avec
+> le minimum de charges récurrentes. Tout abonnement supplémentaire doit être justifié, pas
+> supposé. Cette contrainte a fait réviser l'architecture initialement recommandée (API Pennylane
+> + module analytique payant) au profit du FEC — voir §2bis.
 
 ---
 
@@ -106,11 +113,71 @@ autorisée de l'environnement. L'application déployée (Render), elle, n'est pa
 
 ---
 
+## 2bis · Le FEC comme contrat d'entrée (révision de l'architecture)
+
+### 2bis.1 Pourquoi le FEC plutôt que l'API
+
+Le **Fichier des Écritures Comptables** est un export légalement normalisé (arrêté du 29 juillet
+2013, art. A47 A-1 du LPF) : 18 colonnes obligatoires, séparateur tabulation, encodage UTF-8,
+produit par **tout** logiciel de comptabilité français. Dans Pennylane :
+`Comptabilité → Saisie → Exports → Exporter le FEC`.
+
+| Critère | API Pennylane v2 | **FEC** |
+|---|---|---|
+| Coût récurrent | Abonnement Essentiel minimum | **0 €** |
+| Dépendance éditeur | Totale | **Aucune** — Sage, Cegid, EBP, ACD produisent le même format |
+| Migration d'outil comptable | Réécriture du connecteur | **Aucun impact** |
+| Automatisation | Sync programmée | Export manuel mensuel (~5 min) |
+| Granularité | Grand livre + factures + tiers | Grand livre complet (journal, date, compte, libellé, débit, crédit, pièce) |
+
+Le FEC sert directement l'objectif « à terme, voir quel outil convient le mieux » : l'outil
+comptable devient interchangeable sans toucher une ligne de Meridian.
+
+### 2bis.2 Limites assumées du FEC
+
+- **Un FEC *conforme* exige des écritures validées** (colonne `ValidDate`), ce qui n'arrive
+  qu'à la clôture. Pour du pilotage mensuel on exporte des écritures non validées : parfaitement
+  exploitable en gestion, sans valeur fiscale — ce n'est pas l'usage visé.
+- **C'est un fichier, pas un flux** : un geste manuel par mois. Acceptable au volume d'une maison
+  de cette taille ; à réévaluer si la cadence devient contraignante.
+- **Pas d'axes analytiques** dans le format standard, pas de pièces jointes, pas de détail
+  fournisseur au-delà du compte de tiers. D'où la ventilation par règles ci-dessous.
+
+### 2bis.3 La ventilation analytique vit dans l'outil
+
+Le module « analytique avancée » de Pennylane devient inutile :
+
+- **Côté recettes** : l'ERP sait déjà pour chaque vente le canal (boutique, trunk show,
+  sur-mesure, e-commerce, B2B), la zone et la collection. Aucun besoin que Pennylane le sache.
+- **Côté charges** : une table de règles `compte + tiers + libellé → poste de gestion + canal`
+  ventile de façon déterministe la grande majorité des écritures récurrentes (tannerie →
+  matières ; façonnier → sous-traitance ; loyer → structure). Le reliquat est arbitré une fois
+  à la main, et la règle est mémorisée.
+- La table de règles est **versionnée dans le dépôt**, auditable, et reste la propriété de la
+  maison. C'est la doctrine Meridian appliquée à la finance : la connaissance métier ne se loue pas.
+
+### 2bis.4 Garde-fou d'architecture
+
+**Meridian ne devient jamais le livre comptable.** La source de vérité reste un vrai logiciel de
+comptabilité tenu par l'expert-comptable ; Meridian n'en est qu'une lecture de gestion. Cette
+règle protège d'un risque réel du tout-maison : en cas de panne pendant une clôture, il n'y a
+aucune ligne de support à appeler. Une lecture cassée se répare à froid ; un livre comptable
+cassé, non.
+
+### 2bis.5 Vérification économique préalable
+
+L'offre **Collaboratif** de Pennylane est réservée aux entreprises invitées par leur cabinet et
+**généralement payée par le cabinet**. Avant toute optimisation : établir qui paie quoi
+aujourd'hui. Quitter Pennylane peut augmenter les honoraires du cabinet s'il y produit la
+comptabilité — l'économie serait alors négative.
+
+---
+
 ## 3 · Prérequis bloquants avant tout développement
 
 | # | Prérequis | Pourquoi c'est bloquant |
 |---|---|---|
-| 1 | **Abonnement Pennylane Essentiel ou supérieur** | Sans accès API, tout le projet tombe |
+| 1 | ~~Abonnement Pennylane Essentiel ou supérieur~~ — **levé par D9** | Le FEC est exportable sans condition d'abonnement. L'API redevient un accélérateur optionnel, à n'envisager que si le plan en cours l'inclut déjà |
 | 2 | **C1 — migration des données JSON vers MongoDB** | Les données métier vivent sur un disque Render éphémère. Construire un module financier sur une base effaçable au prochain déploiement, c'est construire à l'envers |
 | 3 | **C2 — bcrypt + JWT + rate limiting** | L'authentification actuelle est un PIN à 4 chiffres en clair, partagé par 4 personnes dont 2 vendeuses. Y mettre derrière le P&L, les marges et les prix d'achat fournisseurs est exclu |
 | 4 | **Fiabilité du BOM à ±10 %** | Un PRI faux est pire que pas de PRI : il sert à fixer les prix |
@@ -225,17 +292,22 @@ C'est le document à faire valider par l'expert-comptable — il conditionne tou
 
 ### 5.4 Checklist opérationnelle
 
-- [ ] Vérifier l'abonnement Pennylane (Essentiel minimum) et le rôle administrateur
-- [ ] Chiffrer le module « analytique avancée » (payant) avant de l'activer
-- [ ] Activer le plan analytique structuré dans les options avancées
-- [ ] Créer les 3 axes et leurs valeurs (§5.1)
-- [ ] Faire valider la structure du P&L de gestion (§5.2) par l'expert-comptable
-- [ ] Ventiler analytiquement les 12 derniers mois (Pennylane permet l'affectation en masse)
-- [ ] Saisir le budget de l'exercice dans Pennylane
+- [ ] Établir **qui paie Pennylane aujourd'hui** (maison ou cabinet, offre Collaboratif ?) — §2bis.5
+- [ ] **Exporter le FEC des 12 derniers mois** (`Comptabilité → Saisie → Exports`) — gratuit, sans
+      condition d'abonnement, c'est le carburant de tout le reste
+- [ ] Faire valider la structure du P&L de gestion (§5.2) par l'expert-comptable — conversation,
+      aucun paramétrage payant requis
+- [ ] Construire la **table de règles de ventilation** (§2bis.3) à partir du FEC réel
+- [ ] Arbitrer à la main le reliquat non ventilé automatiquement, une fois
+- [ ] Poser le budget de l'exercice (dans l'outil, pas nécessairement dans Pennylane)
 - [ ] **Demander l'écriture mensuelle de variation de stock (6031)** sur la base de l'état de
       stock ERP — c'est le point qui rend le P&L mensuel honnête
-- [ ] Générer un token API **en lecture seule** (permet de tester l'extraction sans développer)
+- [ ] Produire un premier P&L de gestion sur les 12 mois d'historique et le confronter au compte
+      de résultat officiel — l'écart doit s'expliquer ligne à ligne
 - [ ] Piloter un mois complet, puis remplir la grille de gap ci-dessous
+
+> Le plan analytique de Pennylane (§5.1) reste le **vocabulaire de référence** des axes, même
+> lorsqu'il n'est pas paramétré dans Pennylane : ce sont ces codes que la table de règles produit.
 
 ### 5.5 Grille de mesure du gap (à remplir après le mois de pilotage)
 
@@ -258,24 +330,30 @@ Application séparée (D7), avec la réserve D7bis : **une seule source de donn�
 
 ```
 ┌──────────────────────────┐        ┌──────────────────────────────┐
-│  Pennylane (API v2)      │        │  Écosystème Tiraboschi       │
-│  scopes :readonly        │        │  MongoDB `tiraboschi`        │
-│  trial_balance           │        │  pos_variants · pos_ventes   │
-│  ledger_entry_lines      │        │  devis · pieces · fournisseurs│
-│  supplier_invoices       │        └──────────────┬───────────────┘
+│  Comptabilité            │        │  Écosystème Tiraboschi       │
+│  (Pennylane aujourd'hui, │        │  MongoDB `tiraboschi`        │
+│   interchangeable)       │        │  pos_variants · pos_ventes   │
+│                          │        │  devis · pieces · fournisseurs│
+│  → FEC mensuel (18 col.) │        └──────────────┬───────────────┘
 └────────────┬─────────────┘                       │ lecture seule
-             │ sync nocturne (25 req/5 s)          │ (utilisateur Mongo dédié)
+             │ dépôt du fichier                    │ (utilisateur Mongo dédié)
              ▼                                     ▼
       ┌──────────────────────────────────────────────────┐
-      │  APP PILOTAGE (séparée : UI + auth dédiées)      │
-      │  collections propres : fin_balance, fin_mapping, │
-      │  fin_budget, fin_pri, fin_prestataires           │
+      │  MERIDIAN FINANCE (séparée : UI + auth dédiées)  │
+      │  fin_ecritures   ← FEC parsé                     │
+      │  fin_regles      ← ventilation compte/tiers→poste│
+      │  fin_budget · fin_pri · fin_prestataires         │
       │  auth : JWT + bcrypt, accès dirigeants seulement │
       └──────────────────────────────────────────────────┘
 ```
 
-- **Table de mapping** `fin_mapping` : compte comptable → poste du P&L de gestion. Éditable dans
-  l'interface, versionnée. C'est l'artefact central d'un outil de contrôle de gestion.
+L'API Pennylane n'apparaît pas dans ce schéma : elle ne remplacerait que la flèche « dépôt du
+fichier » par une sync automatique, sans rien changer en aval. C'est précisément ce qui la rend
+optionnelle et différable.
+
+- **Table de règles** `fin_regles` : `compte + tiers + libellé → poste de gestion + canal`.
+  Éditable dans l'interface, versionnée dans le dépôt. C'est l'artefact central de l'outil — et
+  le seul actif qui ne se rachète pas.
 - **Versionnement du budget** : `fin_budget` stocke chaque version (budget initial, 2+10, 3+9…)
   avec son horodatage. Un atterrissage n'écrase jamais le précédent.
 - **Sync** : worker nocturne, pagination `cursor`, journal d'exécution (succès, volumétrie, erreurs).
@@ -287,8 +365,8 @@ Application séparée (D7), avec la réserve D7bis : **une seule source de donn�
 ## 7 · Backlog prévisionnel (à chiffrer après Phase 0)
 
 ### Phase 1 — Marge & PRI (le différenciant)
-- [ ] Connecteur Pennylane v2 lecture seule + worker de sync + journal
-- [ ] Table de mapping plan comptable → postes de gestion, éditable
+- [ ] Parseur FEC (18 colonnes, tabulation, UTF-8) + contrôle d'équilibre débit/crédit + idempotence
+- [ ] Table de règles de ventilation, éditable et versionnée
 - [ ] Calcul du PRI par SKU (BOM × prix d'achat réels × coût façon × taux de chute)
 - [ ] Marge brute par pièce / modèle / matière / canal
 - [ ] Suivi prestataires : engagé (commandes ERP) vs facturé (Pennylane) vs payé
@@ -304,12 +382,22 @@ Application séparée (D7), avec la réserve D7bis : **une seule source de donn�
 
 ## 8 · Informations manquantes pour chiffrer
 
-- Abonnement Pennylane exact (Essentiel ou supérieur ?)
-- Module « analytique avancée » souscrit ou non, et son coût
-- L'expert-comptable travaille-t-il sur Pennylane (affectation analytique en masse) ?
+- **Un FEC réel** (même partiel, même sur un exercice ancien) — c'est le seul intrant qui permet
+  de construire et de tester la table de règles. ⚠️ Ne pas committer un FEC dans un dépôt public :
+  il contient l'intégralité de la comptabilité.
+- **Qui paie Pennylane aujourd'hui** : la maison, ou le cabinet via l'offre Collaboratif ?
 - Nombre d'entités juridiques (FR seule, ou FR + structure US ?) — change le modèle de données
-- Ordre de grandeur du CA annuel et nombre de factures fournisseurs par mois — détermine si la
-  sync nocturne suffit
+- Ordre de grandeur du CA annuel et nombre d'écritures par mois — détermine si un export mensuel
+  manuel reste confortable
+
+---
+
+## 9 · Journal des révisions
+
+| Date | Révision | Déclencheur |
+|---|---|---|
+| 2026-09-11 | v1.0 — cadrage initial, architecture sur API Pennylane + module analytique payant | Demande initiale |
+| 2026-09-11 | v1.1 — **pivot FEC** (D9), ventilation analytique internalisée (D10), prérequis « abonnement Essentiel » levé | Contrainte dirigeant : marque IA-native, minimum de charges récurrentes, indépendance vis-à-vis de l'éditeur comptable |
 
 ---
 
